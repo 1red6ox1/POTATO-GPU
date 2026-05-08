@@ -86,6 +86,7 @@ module rvlab_cpu #(
 		.instr_rvalid_i(instr_rvalid),
 		.instr_addr_o  (instr_addr),
 		.instr_rdata_i (instr_rdata),
+    .instr_err_i   (instr_err),
 
 		.data_req_o    (data_req),
 		.data_gnt_i    (data_gnt),
@@ -95,6 +96,7 @@ module rvlab_cpu #(
 		.data_addr_o   (data_addr),
 		.data_wdata_o  (data_wdata),
 		.data_rdata_i  (data_rdata),
+    .data_err_i    (data_err),
 
 		.irq_i    (irq_bus),
 		.irq_ack_o(),
@@ -146,6 +148,7 @@ module rvlab_cpu #(
   	.obi_addr_i  (instr_addr),
   	.obi_wdata_i ('0),
   	.obi_rdata_o (instr_rdata),
+    .obi_err_o   (instr_err),
   	
   	.tl_i        (i_fifo_to_adapter),
   	.tl_o        (i_adapter_to_fifo)
@@ -206,6 +209,7 @@ module rvlab_cpu #(
   	.obi_addr_i  (data_addr),
   	.obi_wdata_i (data_wdata),
   	.obi_rdata_o (data_rdata),
+    .obi_err_o   (data_err),
   	
   	.tl_i        (d_fifo_to_adapter),
   	.tl_o        (d_adapter_to_fifo)

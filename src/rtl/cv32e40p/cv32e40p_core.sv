@@ -60,6 +60,7 @@ module cv32e40p_core
     input  logic        instr_rvalid_i,
     output logic [31:0] instr_addr_o,
     input  logic [31:0] instr_rdata_i,
+    input  logic        instr_err_i,
 
     // Data memory interface
     output logic        data_req_o,
@@ -70,6 +71,7 @@ module cv32e40p_core
     output logic [31:0] data_addr_o,
     output logic [31:0] data_wdata_o,
     input  logic [31:0] data_rdata_i,
+    input  logic        data_err_i,
 
     // CVFPU interface
     output logic                              apu_busy_o,
@@ -452,7 +454,7 @@ module cv32e40p_core
       .instr_gnt_i    (instr_gnt_pmp),
       .instr_rvalid_i (instr_rvalid_i),
       .instr_rdata_i  (instr_rdata_i),
-      .instr_err_i    (1'b0),  // Bus error (not used yet)
+      .instr_err_i    (instr_err_i),
       .instr_err_pmp_i(instr_err_pmp),  // PMP error
 
       // outputs to ID stage
@@ -674,7 +676,7 @@ module cv32e40p_core
 
       .prepost_useincr_ex_o(useincr_addr_ex),
       .data_misaligned_i   (data_misaligned),
-      .data_err_i          (data_err_pmp),
+      .data_err_i          (data_err_pmp || data_err_i),
       .data_err_ack_o      (data_err_ack),
 
       // Interrupt Signals

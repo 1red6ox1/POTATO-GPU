@@ -52,6 +52,7 @@ module cv32e40p_top #(
     input  logic        instr_rvalid_i,
     output logic [31:0] instr_addr_o,
     input  logic [31:0] instr_rdata_i,
+    input  logic        instr_err_i,
 
     // Data memory interface
     output logic        data_req_o,
@@ -62,6 +63,7 @@ module cv32e40p_top #(
     output logic [31:0] data_addr_o,
     output logic [31:0] data_wdata_o,
     input  logic [31:0] data_rdata_i,
+    input  logic        data_err_i,
 
     // Interrupt inputs
     input  logic [31:0] irq_i,  // CLINT interrupts + CLINT extension interrupts
@@ -123,6 +125,7 @@ module cv32e40p_top #(
       .instr_rvalid_i(instr_rvalid_i),
       .instr_addr_o  (instr_addr_o),
       .instr_rdata_i (instr_rdata_i),
+      .instr_err_i   (instr_err_i),
 
       .data_req_o   (data_req_o),
       .data_gnt_i   (data_gnt_i),
@@ -132,6 +135,7 @@ module cv32e40p_top #(
       .data_addr_o  (data_addr_o),
       .data_wdata_o (data_wdata_o),
       .data_rdata_i (data_rdata_i),
+      .data_err_i   (data_err_i),
 
       .apu_busy_o    (apu_busy),
       .apu_req_o     (apu_req),

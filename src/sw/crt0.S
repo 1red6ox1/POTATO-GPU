@@ -22,7 +22,7 @@
     nop             // 13
     nop             // 14
     nop             // 15
-    nop             // 16 16..31: Vendor specific IRQs. Ibex: 16..30: External fast IRQs
+    nop             // 16 16..31: CV32E40P specific extension to the CLINT interrupt scheme
     nop             // 17
     nop             // 18
     nop             // 19
@@ -37,7 +37,7 @@
     nop             // 28
     nop             // 29
     nop             // 30
-    j irq_error     // 31  Ibex: NMI
+    j irq_error     // 31
     j _start        // 32: Reset vector / global entry point
 
     .option pop
@@ -97,16 +97,19 @@ _start:
 
     csrc mstatus, 0x8 // global interrupt disable
 
+_exit:
     lui  t0,     %hi(hostio + 0x800)
     addi t0, t0, %lo(hostio + 0x800)
     sw a0, 4(t0) // _hostid_start.retval = return value of main
     addi t1, zero, 1
     sw t1, 0(t0) // _hostid_start.flags = 1;
 
-
-irq_error:
 end_loop:
     j end_loop
+
+irq_error:
+    jal rvlab_irq_error
+    j _exit
 
 
 irq_entry:
