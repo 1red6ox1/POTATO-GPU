@@ -173,7 +173,8 @@ module dm_csrs #(
   logic [63:0]        sbaddr_d, sbaddr_q;
   logic [63:0]        sbdata_d, sbdata_q;
 
-  logic [NrHarts-1:0] havereset_d, havereset_q;
+  logic [NrHarts-1:0] havereset_d, havereset_q,
+                      resethaltreq_d, resethaltreq_q;
   // program buffer
   logic [dm::ProgBufSize-1:0][31:0] progbuf_d, progbuf_q;
   logic [dm::DataCount-1:0][31:0] data_d, data_q;
@@ -195,13 +196,16 @@ module dm_csrs #(
   // needed to avoid lint warnings
   logic [NrHartsAligned-1:0] havereset_d_aligned, havereset_q_aligned,
                              resumeack_aligned, unavailable_aligned,
-                             halted_aligned;
+                             halted_aligned,
+                             resethaltreq_d_aligned, resethaltreq_q_aligned;
   assign resumeack_aligned   = NrHartsAligned'(resumeack_i);
   assign unavailable_aligned = NrHartsAligned'(unavailable_i);
   assign halted_aligned      = NrHartsAligned'(halted_i);
 
-  assign havereset_d         = NrHarts'(havereset_d_aligned);
-  assign havereset_q_aligned = NrHartsAligned'(havereset_q);
+  assign havereset_d            = NrHarts'(havereset_d_aligned);
+  assign havereset_q_aligned    = NrHartsAligned'(havereset_q);
+  assign resethaltreq_d         = NrHarts'(resethaltreq_d_aligned);
+  assign resethaltreq_q_aligned = NrHartsAligned'(resethaltreq_q);
 
   dm::hartinfo_t [NrHartsAligned-1:0] hartinfo_aligned;
   always_comb begin : p_hartinfo_align
@@ -223,8 +227,7 @@ module dm_csrs #(
     dmstatus.version = dm::DbgVersion013;
     // no authentication implemented
     dmstatus.authenticated = 1'b1;
-    // we do not support halt-on-reset sequence
-    dmstatus.hasresethaltreq = 1'b0;
+    dmstatus.hasresethaltreq = 1'b1;
     // TODO(zarubaf) things need to change here if we implement the array mask
     dmstatus.allhavereset = havereset_q_aligned[selected_hart];
     dmstatus.anyhavereset = havereset_q_aligned[selected_hart];
@@ -260,15 +263,16 @@ module dm_csrs #(
     abstractauto_d.zero0 = '0;
 
     // default assignments
-    havereset_d_aligned = NrHartsAligned'(havereset_q);
-    dmcontrol_d         = dmcontrol_q;
-    cmderr_d            = cmderr_q;
-    command_d           = command_q;
-    progbuf_d           = progbuf_q;
-    data_d              = data_q;
-    sbcs_d              = sbcs_q;
-    sbaddr_d            = 64'(sbaddress_i);
-    sbdata_d            = sbdata_q;
+    havereset_d_aligned    = NrHartsAligned'(havereset_q);
+    resethaltreq_d_aligned = NrHartsAligned'(resethaltreq_q);
+    dmcontrol_d            = dmcontrol_q;
+    cmderr_d               = cmderr_q;
+    command_d              = command_q;
+    progbuf_d              = progbuf_q;
+    data_d                 = data_q;
+    sbcs_d                 = sbcs_q;
+    sbaddr_d               = 64'(sbaddress_i);
+    sbdata_d               = sbdata_q;
 
     resp_queue_data         = 32'b0;
     cmd_valid_d             = 1'b0;
@@ -376,6 +380,13 @@ module dm_csrs #(
           // clear the havreset of the selected hart
           if (dmcontrol.ackhavereset) begin
             havereset_d_aligned[selected_hart] = 1'b0;
+          end
+          // set + clear resethaltreq
+          if (dmcontrol.setresethaltreq) begin
+            resethaltreq_d_aligned[selected_hart] = 1'b1;
+          end
+          if (dmcontrol.clrresethaltreq) begin
+            resethaltreq_d_aligned[selected_hart] = 1'b0;
           end
           dmcontrol_d = dmi_req_i.data;
         end
@@ -538,7 +549,7 @@ module dm_csrs #(
     haltreq_o = '0;
     resumereq_o = '0;
     if (selected_hart < (HartSelLen+1)'(NrHarts)) begin
-      haltreq_o[selected_hart]   = dmcontrol_q.haltreq;
+      haltreq_o[selected_hart]   = dmcontrol_q.haltreq | (resethaltreq_q[selected_hart] & havereset_q[selected_hart]);
       resumereq_o[selected_hart] = dmcontrol_q.resumereq;
     end
   end
@@ -586,8 +597,10 @@ module dm_csrs #(
       sbaddr_q       <= '0;
       sbdata_q       <= '0;
       havereset_q    <= '1;
+      resethaltreq_q <= '0;
     end else begin
       havereset_q    <= SelectableHarts & havereset_d;
+      resethaltreq_q <= SelectableHarts & resethaltreq_d;
       // synchronous re-set of debug module, active-low, except for dmactive
       if (!dmcontrol_q.dmactive) begin
         dmcontrol_q.haltreq          <= '0;
