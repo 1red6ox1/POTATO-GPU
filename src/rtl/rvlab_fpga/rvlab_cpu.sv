@@ -78,7 +78,7 @@ module rvlab_cpu #(
 		.boot_addr_i        (32'h00000080),
 		.mtvec_addr_i       (32'h00000000),
 		.dm_halt_addr_i     (32'h1E000800),
-		.dm_exception_addr_i(32'h1E000810),
+		.dm_exception_addr_i(32'h1E000808),
 		.hart_id_i          ('0),
 		
 		.instr_req_o   (instr_req),

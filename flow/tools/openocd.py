@@ -10,6 +10,8 @@ import termios
 import select
 from contextlib import contextmanager
 
+from .dmi_utils import reset_halt_rvlab_cpu
+
 class Hostio:
     OBUF_SIZE = 1024
     IBUF_SIZE = 1024
@@ -122,7 +124,15 @@ class OpenOcd:
 
 
     def run_prog(self, elf_filename):
-        self.cmd("halt")
+        # Initial reset-halt to guarantee successful debugger entry
+        reset_halt_rvlab_cpu(self)
+
+        # Init-script examination may have failed; examine again
+        self.cmd("lpriscv1.tap.0 arp_examine")
+
+        # Reset-halt again to ensure stable state before entering program
+        reset_halt_rvlab_cpu(self)
+
         self.cmd("tcl_trace off")
         flags = 0
         self.hostio_clear()        

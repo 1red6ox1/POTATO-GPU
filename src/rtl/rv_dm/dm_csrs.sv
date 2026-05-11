@@ -626,6 +626,7 @@ module dm_csrs #(
         sbcs_q                       <= '0;
         sbaddr_q                     <= '0;
         sbdata_q                     <= '0;
+        resethaltreq_q               <= '0;
       end else begin
         dmcontrol_q                  <= dmcontrol_d;
         cmderr_q                     <= cmderr_d;
