@@ -9,6 +9,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 
+// Modified by RVLab Contributors.
+
 ////////////////////////////////////////////////////////////////////////////////
 // Engineer:       Renzo Andri - andrire@student.ethz.ch                      //
 //                                                                            //

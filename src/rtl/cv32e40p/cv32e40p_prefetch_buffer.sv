@@ -9,6 +9,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 
+// Modified by RVLab Contributors.
+
 ////////////////////////////////////////////////////////////////////////////////
 // Engineer:       Andreas Traber - atraber@iis.ee.ethz.ch                    //
 //                                                                            //
@@ -71,7 +73,7 @@ module cv32e40p_prefetch_buffer #(
   logic                     fifo_flush_but_first;
   logic [FIFO_ADDR_DEPTH:0] fifo_cnt;  // fifo_cnt should count from 0 to FIFO_DEPTH!
 
-  logic [             32:0] fifo_rdata;
+  logic [             31:0] fifo_rdata;
   logic                     fifo_push;
   logic                     fifo_pop;
   logic                     fifo_empty;
@@ -141,16 +143,14 @@ module cv32e40p_prefetch_buffer #(
       .cnt_o            (fifo_cnt),
       .data_i           ({resp_err, resp_rdata}),
       .push_i           (fifo_push),
-      .data_o           (fifo_rdata),
+      .data_o           ({fifo_err, fifo_rdata}),
       .pop_i            (fifo_pop)
   );
 
-  assign fifo_err = fifo_rdata[32];
-
   // First POP from the FIFO if it is not empty.
   // Otherwise, try to fall-through it.
-  assign fetch_rdata_o =  fifo_empty ? resp_rdata : fifo_rdata[31:0];
-  assign fetch_err_o   = (fifo_empty ? resp_err   : fifo_err        ) && fetch_valid;
+  assign fetch_rdata_o =  fifo_empty ? resp_rdata : fifo_rdata;
+  assign fetch_err_o   = (fifo_empty ? resp_err   : fifo_err  ) && fetch_valid;
 
   //////////////////////////////////////////////////////////////////////////////
   // OBI interface
