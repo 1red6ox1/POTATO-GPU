@@ -166,6 +166,13 @@ module rvlab_tlul_ddr (
   );
 
   always_comb begin
+    tl_o = err_resp_rsp;
+
+    if (cache_rsp.d_valid) begin
+      tl_o = cache_rsp;
+      err_resp_req.d_ready = '0;
+    end
+
     cache_req = tl_i;
     err_resp_req = tl_i;
 
@@ -173,13 +180,7 @@ module rvlab_tlul_ddr (
       err_resp_req.a_valid = '0;
     end else begin
       cache_req.a_valid = '0;
-    end
-
-    tl_o = err_resp_rsp;
-
-    if (cache_rsp.d_valid) begin
-      tl_o = cache_rsp;
-      err_resp_req.d_ready = '0;
+      tl_o.d_error = '1;
     end
   end
 
