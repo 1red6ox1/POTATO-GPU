@@ -10,7 +10,7 @@ import termios
 import select
 from contextlib import contextmanager
 
-from .dmi_utils import reset_halt_rvlab_cpu
+from .riscv_debug_helper import reset_halt_rvlab_cpu
 
 class Hostio:
     OBUF_SIZE = 1024
