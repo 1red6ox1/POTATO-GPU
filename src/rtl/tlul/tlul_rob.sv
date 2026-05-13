@@ -127,9 +127,9 @@ module tlul_rob #(
 				end else begin
 					// Otherwise write data to ROB and validate
 					// (This is the part that enables out-of-order delivery :P)
-					entries[device_i.d_source].state 	  <= Valid;
+					entries[device_i.d_source].state 	   <= Valid;
 					entries[device_i.d_source].device_op   <= device_i.d_opcode;
-					entries[device_i.d_source].data 		  <= device_i.d_data;
+					entries[device_i.d_source].data        <= device_i.d_data;
 					entries[device_i.d_source].device_err  <= device_i.d_error;
 					entries[device_i.d_source].device_size <= device_i.d_size;
 				end

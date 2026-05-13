@@ -83,10 +83,16 @@ module rvlab_tests (
 
     tu.dm_start(errcnt);
 
-    tu.dm_halt(errcnt);
+    // Reset hart and immediately debug
+    tu.dm_ackhavereset(errcnt);
+    tu.dm_set_resethaltreq(errcnt);
+    tu.dm_ndmreset(errcnt);
+    tu.dm_ackhavereset(errcnt);
+    tu.dm_clear_resethaltreq(errcnt);
   
     $display("Loading memory...");
     tu.dm_load_delta(sw_mem_filename, errcnt);
+
     $display("Starting program...");
     tu.dm_write_cpureg(DPC, 32'h00000080, errcnt);
     tu.dm_resume(errcnt);

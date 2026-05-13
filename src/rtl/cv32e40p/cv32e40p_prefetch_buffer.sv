@@ -9,6 +9,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 
+// Modified by RVLab Contributors.
+
 ////////////////////////////////////////////////////////////////////////////////
 // Engineer:       Andreas Traber - atraber@iis.ee.ethz.ch                    //
 //                                                                            //
@@ -42,6 +44,7 @@ module cv32e40p_prefetch_buffer #(
     input  logic        fetch_ready_i,
     output logic        fetch_valid_o,
     output logic [31:0] fetch_rdata_o,
+    output logic        fetch_err_o,
 
     // goes to instruction memory / instruction cache
     output logic        instr_req_o,
@@ -49,7 +52,7 @@ module cv32e40p_prefetch_buffer #(
     output logic [31:0] instr_addr_o,
     input  logic [31:0] instr_rdata_i,
     input  logic        instr_rvalid_i,
-    input  logic        instr_err_i,  // Not used yet (future addition)
+    input  logic        instr_err_i,
     input  logic        instr_err_pmp_i,  // Not used yet (future addition)
 
     // Prefetch Buffer Status
@@ -74,6 +77,7 @@ module cv32e40p_prefetch_buffer #(
   logic                     fifo_push;
   logic                     fifo_pop;
   logic                     fifo_empty;
+  logic                     fifo_err;
 
   // Transaction response interface (between cv32e40p_obi_interface and cv32e40p_fetch_fifo)
   logic                     resp_valid;
@@ -83,6 +87,9 @@ module cv32e40p_prefetch_buffer #(
   //////////////////////////////////////////////////////////////////////////////
   // Prefetch Controller
   //////////////////////////////////////////////////////////////////////////////
+
+  logic  fetch_valid;
+  assign fetch_valid_o = fetch_valid && !fetch_err_o;
 
   cv32e40p_prefetch_controller #(
       .DEPTH     (FIFO_DEPTH),
@@ -107,7 +114,7 @@ module cv32e40p_prefetch_buffer #(
       .resp_valid_i(resp_valid),
 
       .fetch_ready_i(fetch_ready_i),
-      .fetch_valid_o(fetch_valid_o),
+      .fetch_valid_o(fetch_valid),
 
       .fifo_push_o           (fifo_push),
       .fifo_pop_o            (fifo_pop),
@@ -123,7 +130,7 @@ module cv32e40p_prefetch_buffer #(
 
   cv32e40p_fifo #(
       .FALL_THROUGH(1'b0),
-      .DATA_WIDTH  (32),
+      .DATA_WIDTH  (33),
       .DEPTH       (FIFO_DEPTH)
   ) fifo_i (
       .clk_i            (clk),
@@ -134,15 +141,16 @@ module cv32e40p_prefetch_buffer #(
       .full_o           (),
       .empty_o          (fifo_empty),
       .cnt_o            (fifo_cnt),
-      .data_i           (resp_rdata),
+      .data_i           ({resp_err, resp_rdata}),
       .push_i           (fifo_push),
-      .data_o           (fifo_rdata),
+      .data_o           ({fifo_err, fifo_rdata}),
       .pop_i            (fifo_pop)
   );
 
   // First POP from the FIFO if it is not empty.
   // Otherwise, try to fall-through it.
-  assign fetch_rdata_o = fifo_empty ? resp_rdata : fifo_rdata;
+  assign fetch_rdata_o =  fifo_empty ? resp_rdata : fifo_rdata;
+  assign fetch_err_o   = (fifo_empty ? resp_err   : fifo_err  ) && fetch_valid;
 
   //////////////////////////////////////////////////////////////////////////////
   // OBI interface
@@ -168,7 +176,7 @@ module cv32e40p_prefetch_buffer #(
 
       .resp_valid_o(resp_valid),
       .resp_rdata_o(resp_rdata),
-      .resp_err_o  (resp_err),  // Unused for now
+      .resp_err_o  (resp_err),
 
       .obi_req_o   (instr_req_o),
       .obi_gnt_i   (instr_gnt_i),
@@ -241,7 +249,7 @@ module cv32e40p_prefetch_buffer #(
   // GRANT SUPPRESSION IN THE PMP.
 
   property p_no_error;
-    @(posedge clk) (1'b1) |-> ((instr_err_i == 1'b0) && (instr_err_pmp_i == 1'b0));
+    @(posedge clk) (1'b1) |-> (instr_err_pmp_i == 1'b0);
   endproperty
 
   a_no_error :

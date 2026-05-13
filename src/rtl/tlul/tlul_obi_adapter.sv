@@ -18,6 +18,7 @@ module tlul_obi_adapter #(
 	input  logic [31:0] obi_addr_i,
 	input  logic [31:0] obi_wdata_i,
 	output logic [31:0] obi_rdata_o,
+	output logic        obi_err_o,
 	
 	output tlul_pkg::tl_h2d_t tl_o,
 	input  tlul_pkg::tl_d2h_t tl_i
@@ -58,5 +59,6 @@ module tlul_obi_adapter #(
 	assign obi_gnt_o = host_d2h.a_ready;
 	assign obi_rvalid_o = host_d2h.d_valid;
 	assign obi_rdata_o = host_d2h.d_data;
+	assign obi_err_o = host_d2h.d_error;
 	
 endmodule

@@ -9,6 +9,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations under the License.
 
+// Modified by RVLab Contributors.
+
 ////////////////////////////////////////////////////////////////////////////////
 // Engineer:       Renzo Andri - andrire@student.ethz.ch                      //
 //                                                                            //
@@ -174,8 +176,6 @@ module cv32e40p_if_stage #(
   // tell CS register file to initialize mtvec on boot
   assign csr_mtvec_init_o = (pc_mux_i == PC_BOOT) & pc_set_i;
 
-  assign fetch_failed    = 1'b0; // PMP is not supported in CV32E40P
-
   // prefetch buffer, caches a fixed number of instructions
   cv32e40p_prefetch_buffer #(
       .PULP_OBI  (PULP_OBI),
@@ -195,6 +195,7 @@ module cv32e40p_if_stage #(
       .fetch_ready_i(fetch_ready),
       .fetch_valid_o(fetch_valid),
       .fetch_rdata_o(fetch_rdata),
+      .fetch_err_o  (fetch_failed),
 
       // goes to instruction memory / instruction cache
       .instr_req_o    (instr_req_o),

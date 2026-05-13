@@ -97,7 +97,7 @@ module rvlab_tlul_ddr (
 
   ///////////////////
   //               //
-  // INSTANTIATION //
+  // MAIN TOPOLOGY //
   //               //
   ///////////////////
 
@@ -124,18 +124,67 @@ module rvlab_tlul_ddr (
   ddr3_h2d_t blockmgr_req, llc_req, prefetch_req;
   ddr3_d2h_t blockmgr_rsp, llc_rsp, prefetch_rsp;
 
+  tlul_pkg::tl_h2d_t cache_req, err_resp_req;
+  tlul_pkg::tl_d2h_t cache_rsp, err_resp_rsp;
+
   rvlab_ddr_cache #(
     .IDX_BITS(9)
   ) ddr_llc_i (
     .clk_i,
     .rst_ni,
 
-    .tl_i,
-    .tl_o,
+    .tl_i(cache_req),
+    .tl_o(cache_rsp),
 
     .block_req_o(llc_req),
     .block_rsp_i(llc_rsp)
   );
+
+  // The tl_i/tl_o interface has an additional
+  // check for whether the DDR system is
+  // currently not calibrated. If it isn't,
+  // requests are answered with an error.
+
+  // Strategy: Dispatch incoming request to either an
+  //   error responder module, or to the cache,
+  //   depending on ctrl_calib_complete. If one module
+  //   asserts d_valid, forward that response. If both
+  //   assert d_valid at the same time, priority is
+  //   given to the cache's response, as a such
+  //   contention can only occur if calibration is
+  //   turned off immediately after a request to the
+  //   cache has been made, missing in the cache but
+  //   hitting in the prefetch buffer. Simultaneous
+  //   assertion of both d_valid signals should be
+  //   generally nearly impossible.
+
+  tlul_err_resp ddr_err_i (
+    .clk_i,
+    .rst_ni,
+    .tl_h_i(err_resp_req),
+    .tl_h_o(err_resp_rsp)
+  );
+
+  always_comb begin
+    tl_o = err_resp_rsp;
+
+    if (cache_rsp.d_valid) begin
+      tl_o = cache_rsp;
+      err_resp_req.d_ready = '0;
+    end
+
+    cache_req = tl_i;
+    err_resp_req = tl_i;
+
+    if (ctrl_calib_complete) begin
+      err_resp_req.a_valid = '0;
+    end else begin
+      cache_req.a_valid = '0;
+      tl_o.d_error = '1;
+    end
+  end
+
+  /* Prefetcher */
 
   rvlab_ddr_prefetch prefetcher_i (
     .clk_i,
@@ -344,9 +393,11 @@ module rvlab_tlul_ddr (
   assign ctrl_calib_complete = '0;
   assign ctrl_calib_status = '0;
 
-  tlul_short_circuit ddr_short_i (
-    .tl_i,
-    .tl_o
+  tlul_err_resp ddr_err_i (
+    .clk_i,
+    .rst_ni,
+    .tl_h_i(tl_i),
+    .tl_h_o(tl_o)
   );
 
 `endif

@@ -135,11 +135,31 @@ module rvlab_test_utils(
   task dm_halt(inout int errcnt);
     dmcontrol.haltreq = '1;
     dmi_write(dm::DMControl, dmcontrol, errcnt);
-    dmcontrol.haltreq = '0;
 
     do begin
       tu.dmi_read(dm::DMStatus, dmstatus, errcnt);
     end while(~dmstatus.allhalted);
+
+    dmcontrol.haltreq = '0;
+    dmi_write(dm::DMControl, dmcontrol, errcnt);
+  endtask
+
+  task dm_ndmreset(inout int errcnt);
+    dmcontrol.ndmreset = '1;
+    dmi_write(dm::DMControl, dmcontrol, errcnt);
+
+    do begin
+      tu.dmi_read(dm::DMStatus, dmstatus, errcnt);
+    end while(~dmstatus.allhavereset);
+
+    dmcontrol.ndmreset = '0;
+    dmi_write(dm::DMControl, dmcontrol, errcnt);
+  endtask
+
+  task dm_ackhavereset(inout int errcnt);
+    dmcontrol.ackhavereset = '1;
+    dmi_write(dm::DMControl, dmcontrol, errcnt);
+    dmcontrol.ackhavereset = '0;
   endtask
 
   task dm_resume(inout int errcnt);
@@ -150,6 +170,18 @@ module rvlab_test_utils(
     do begin
       tu.dmi_read(dm::DMStatus, dmstatus, errcnt);
     end while(~dmstatus.allrunning);
+  endtask
+
+  task dm_set_resethaltreq(inout int errcnt);
+    dmcontrol.setresethaltreq = '1;
+    dmi_write(dm::DMControl, dmcontrol, errcnt);
+    dmcontrol.setresethaltreq = '0;
+  endtask
+
+  task dm_clear_resethaltreq(inout int errcnt);
+    dmcontrol.clrresethaltreq = '1;
+    dmi_write(dm::DMControl, dmcontrol, errcnt);
+    dmcontrol.clrresethaltreq = '0;
   endtask
 
   task dm_write_cpureg(input logic [15:0] regno, input logic [31:0] wdata, inout int errcnt);
