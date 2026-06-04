@@ -4,6 +4,7 @@
 module rvlab_core (
   input  logic clk_i,
   input  logic rst_ni,
+  input  logic clk_100mhz_i,
   input  logic rst_dbg_ni,
   output logic ndmreset_o,
 
@@ -16,8 +17,8 @@ module rvlab_core (
   input  top_pkg::userio_board2fpga_t userio_i,
   output top_pkg::userio_fpga2board_t userio_o,
 
-  output tlul_pkg::tl_h2d_t tl_ddr_o,
-  input  tlul_pkg::tl_d2h_t tl_ddr_i,
+  output rvlab_ddr_pkg::ddr3_h2d_t ddr_o,
+  input  rvlab_ddr_pkg::ddr3_d2h_t ddr_i,
   output tlul_pkg::tl_h2d_t tl_ddr_ctrl_o,
   input  tlul_pkg::tl_d2h_t tl_ddr_ctrl_i
 
@@ -33,8 +34,8 @@ module rvlab_core (
   tl_d2h_t tl_cpui_d2h, tl_cpud_d2h, tl_dbgsba_d2h, tl_student_host_d2h;
 
   // xbar_main devices:
-  tl_h2d_t tl_bram_main_h2d, tl_peri_h2d, tl_student_device_fast_h2d;
-  tl_d2h_t tl_bram_main_d2h, tl_peri_d2h, tl_student_device_fast_d2h;
+  tl_h2d_t tl_bram_main_h2d, tl_peri_h2d, tl_student_device_fast_h2d, tl_ddr_h2d;
+  tl_d2h_t tl_bram_main_d2h, tl_peri_d2h, tl_student_device_fast_d2h, tl_ddr_d2h;
 
   // xbar_peri devices:
   tl_h2d_t tl_dbgmem_h2d, tl_timer_h2d, tl_regdemo_h2d, tl_student_device_peri_h2d;
@@ -61,8 +62,8 @@ module rvlab_core (
     .tl_bram_main_i          (tl_bram_main_d2h),
     .tl_peri_o               (tl_peri_h2d),
     .tl_peri_i               (tl_peri_d2h),
-    .tl_ddr_o,
-    .tl_ddr_i,
+    .tl_ddr_o                (tl_ddr_h2d),
+    .tl_ddr_i                (tl_ddr_d2h),
     .tl_student_device_fast_o(tl_student_device_fast_h2d),
     .tl_student_device_fast_i(tl_student_device_fast_d2h)
   );
@@ -170,6 +171,7 @@ module rvlab_core (
 
   student student_i (
     .clk_i,
+    .clk_100mhz_i,
     .rst_ni,
     .userio_i,
     .userio_o,
@@ -179,7 +181,12 @@ module rvlab_core (
     .tl_device_fast_i(tl_student_device_fast_h2d),
     .tl_device_fast_o(tl_student_device_fast_d2h),
     .tl_host_i       (tl_student_host_d2h),
-    .tl_host_o       (tl_student_host_h2d)
+    .tl_host_o       (tl_student_host_h2d),
+
+    .tl_ddr_i        (tl_ddr_h2d),
+    .tl_ddr_o        (tl_ddr_d2h),
+    .ddr_o,
+    .ddr_i
   );
 
 endmodule

@@ -50,6 +50,9 @@ void cmd_help(char *args[]);
 void cmd_lw(char *args[]);
 void cmd_sw(char *args[]);
 void cmd_dump(char *args[]);
+void cmd_clear_fb(char *args[]);
+void cmd_disable_hdmi(char *args[]);
+void cmd_enable_hdmi(char *args[]);
 
 struct cmd {
     char *name;
@@ -61,6 +64,9 @@ struct cmd {
     {"lw", " ADDR: Load word.", 1, cmd_lw},
     {"sw", " ADDR DATA: Store word.", 2, cmd_sw},
     {"dump", " ADDR WORDS: Dump memory.", 2, cmd_dump},
+    {"frame_clear", " FBID R G B: Clear Frame Buffer.", 4, cmd_clear_fb},
+    {"hdmi_off", ": Turn off Monitor.", 0, cmd_disable_hdmi},
+    {"hdmi_on", ": Turn on Monitor.", 0, cmd_enable_hdmi},
     {NULL, NULL, 0, NULL}
 };
 
@@ -142,9 +148,47 @@ void cmd_sw(char *args[]) {
 }
 
 
+void cmd_clear_fb(char *args[]) {
+    unsigned char r, g, b;
+    unsigned char fbid;
+
+    fbid = atoi(args[1]);
+    r = atoi(args[2]);
+    g = atoi(args[3]);
+    b = atoi(args[4]);
+
+    printf("Filling FB %u with R=%03u, G=%03u, B=%03u\n", fbid, r, g, b);
+
+    REG32(FRAMECLEAR_DMA_FBID(0)) = fbid;
+    REG32(FRAMECLEAR_DMA_CLEAR_COLOR(0)) = (r << 16) | (g << 8) | (b << 0);
+    REG32(FRAMECLEAR_DMA_MODE(0)) = 0;
+    REG32(FRAMECLEAR_DMA_STATUS(0)) = 1;
+
+    uint32_t start = read_csr("mcycle");
+
+    while (REG32(FRAMECLEAR_DMA_STATUS(0)));
+
+    uint32_t finish = read_csr("mcycle");
+
+    printf("Took %u cycles!\n", finish - start);
+
+    REG32(HDMI_CTRL_FBID(0)) = fbid;
+}
+
+void cmd_disable_hdmi(char *args[]) {
+    REG32(HDMI_CTRL_CTRL(0)) = 0;
+}
+
+void cmd_enable_hdmi(char *args[]) {
+    REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB);
+    REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
+}
+
 
 int main(void) {
     ddr_init();
+    REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB);
+    REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
 
     printf("Welcome to rvlab monitor.\n");
 

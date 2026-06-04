@@ -8,8 +8,8 @@ module rvlab_tlul_ddr (
   input logic clk_100mhz_i,
 
   // TL-UL slave interface
-  input  tlul_pkg::tl_h2d_t tl_i,
-  output tlul_pkg::tl_d2h_t tl_o,
+  input  rvlab_ddr_pkg::ddr3_h2d_t req_i,
+  output rvlab_ddr_pkg::ddr3_d2h_t rsp_o,
   input  tlul_pkg::tl_h2d_t tl_ctrl_i,
   output tlul_pkg::tl_d2h_t tl_ctrl_o,
 
@@ -121,92 +121,25 @@ module rvlab_tlul_ddr (
 
   /* LLC */
 
-  ddr3_h2d_t blockmgr_req, llc_req, prefetch_req;
-  ddr3_d2h_t blockmgr_rsp, llc_rsp, prefetch_rsp;
+  ddr3_h2d_t blockmgr_req;
+  ddr3_d2h_t blockmgr_rsp;
 
   tlul_pkg::tl_h2d_t cache_req, err_resp_req;
   tlul_pkg::tl_d2h_t cache_rsp, err_resp_rsp;
 
-  rvlab_ddr_cache #(
-    .IDX_BITS(9)
-  ) ddr_llc_i (
-    .clk_i,
-    .rst_ni,
-
-    .tl_i(cache_req),
-    .tl_o(cache_rsp),
-
-    .block_req_o(llc_req),
-    .block_rsp_i(llc_rsp)
-  );
-
-  // The tl_i/tl_o interface has an additional
-  // check for whether the DDR system is
-  // currently not calibrated. If it isn't,
-  // requests are answered with an error.
-
-  // Strategy: Dispatch incoming request to either an
-  //   error responder module, or to the cache,
-  //   depending on ctrl_calib_complete. If one module
-  //   asserts d_valid, forward that response. If both
-  //   assert d_valid at the same time, priority is
-  //   given to the cache's response, as a such
-  //   contention can only occur if calibration is
-  //   turned off immediately after a request to the
-  //   cache has been made, missing in the cache but
-  //   hitting in the prefetch buffer. Simultaneous
-  //   assertion of both d_valid signals should be
-  //   generally nearly impossible.
-
-  tlul_err_resp ddr_err_i (
-    .clk_i,
-    .rst_ni,
-    .tl_h_i(err_resp_req),
-    .tl_h_o(err_resp_rsp)
-  );
-
-  always_comb begin
-    tl_o = err_resp_rsp;
-
-    if (cache_rsp.d_valid) begin
-      tl_o = cache_rsp;
-      err_resp_req.d_ready = '0;
-    end
-
-    cache_req = tl_i;
-    err_resp_req = tl_i;
-
-    if (ctrl_calib_complete) begin
-      err_resp_req.a_valid = '0;
-    end else begin
-      cache_req.a_valid = '0;
-      tl_o.d_error = '1;
-    end
-  end
-
-  /* Prefetcher */
-
-  rvlab_ddr_prefetch prefetcher_i (
-    .clk_i,
-    .rst_ni,
-
-    .fe_req_i(llc_req),
-    .fe_rsp_o(llc_rsp),
-
-    .be_req_o(prefetch_req),
-    .be_rsp_i(prefetch_rsp)
-  );
-
   /* CDC FIFO */
 
-  rvlab_ddr_cdc_fifo cdc_fifo_i (
+  rvlab_ddr_cdc_fifo #(
+    .ReqDepth(8),
+    .RspDepth(8)
+  ) cdc_fifo_i (
     .clk_h_i (clk_i),
     .rst_h_ni(rst_ni),
     .clk_d_i (clk_ctrl),
     .rst_d_ni(ddr_rstn),
 
-    .wtl_h_i (prefetch_req),
-    .wtl_h_o (prefetch_rsp),
+    .wtl_h_i (req_i),
+    .wtl_h_o (rsp_o),
     .wtl_d_o (blockmgr_req),
     .wtl_d_i (blockmgr_rsp)
   );
@@ -393,12 +326,10 @@ module rvlab_tlul_ddr (
   assign ctrl_calib_complete = '0;
   assign ctrl_calib_status = '0;
 
-  tlul_err_resp ddr_err_i (
-    .clk_i,
-    .rst_ni,
-    .tl_h_i(tl_i),
-    .tl_h_o(tl_o)
-  );
+  assign rsp_o = '{
+    d_opcode: tlul_pkg::AccessAck,
+    default: '0
+  };
 
 `endif
 

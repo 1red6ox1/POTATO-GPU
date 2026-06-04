@@ -110,7 +110,7 @@ module system_tb;
   assign (weak1, weak0) hdmi_tx_rscl  = '1;
   assign (weak1, weak0) hdmi_tx_rsda  = '1;
 
-  assign                hdmi_tx_hpd   = '0;
+  assign                hdmi_tx_hpd   = '1;
 
   assign                eth_rxd       = '0;
   assign                eth_rxctl     = '0;
