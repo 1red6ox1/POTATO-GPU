@@ -1,0 +1,47 @@
+// Copyright David Schröder 2026.
+
+{
+	name: "frameclear_dma"
+	clock_primary: "sys_clk"
+	bus_device: "tlul"
+	regwidth: "32"
+	registers: [
+		{
+			name: "fbid"
+			desc: "Framebuffer ID"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "1:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "clear_color"
+			desc: "Value to write to every pixel"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "23:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "mode"
+			desc: "Mode, 0=Color buffer, 1=Depth buffer"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "status"
+			desc: "DMA Status, 0=Idle, 1=Active"
+			swaccess: "rw"
+			hwaccess: "hrw"
+			hwqe: "true"
+			fields: [
+				{bits: "0", name: "val", desc: "value"}
+			]
+		}
+	]
+}
