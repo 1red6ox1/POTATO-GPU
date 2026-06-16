@@ -30,6 +30,7 @@ class Ddr3Model(Block):
                 "%MEM_DENSITY": "4Gb",
                 "%MEM_SPEEDGRADE": "187E",
                 "%MEM_DEVICE_WIDTH": "16",
+                "MEM_BITS": "21"
             })
 
         r = Result()

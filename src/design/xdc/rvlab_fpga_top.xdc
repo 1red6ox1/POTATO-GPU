@@ -12,6 +12,9 @@ set_property -dict { PACKAGE_PIN R4    IOSTANDARD LVCMOS33 } [get_ports { clk_10
 create_clock -add -name clk_100mhz -period 10.00 -waveform {0 5} [get_ports clk_100mhz_i]
 create_generated_clock -name sys_clk [get_pin clkmgr_i/mmcm_i/CLKOUT0]
 
+create_generated_clock -name pixel_clk [get_pin core_i/student_i/hdmi_i/clkmgr_i/mmcm2_i/CLKOUT1]
+create_generated_clock -name pixel_clk_x5 [get_pin core_i/student_i/hdmi_i/clkmgr_i/mmcm2_i/CLKOUT0]
+
 # JTAG via FT2232H
 # ----------------
 set_property -dict { PACKAGE_PIN U20   IOSTANDARD LVCMOS33 } [get_ports { jtag_tck_i}]; #IO_L11P_T1_SRCC_14 Sch=prog_d0/sck
@@ -36,6 +39,9 @@ set_clock_groups -group [get_clocks tck] -asynchronous
 
 # sys_clk and derived clocks are asynchronous from all others
 set_clock_groups -group [get_clocks sys_clk] -asynchronous
+
+set_clock_groups -group [get_clocks pixel_clk] -asynchronous
+set_clock_groups -group [get_clocks pixel_clk_x5] -asynchronous
 
 # Basic user I/O
 # --------------

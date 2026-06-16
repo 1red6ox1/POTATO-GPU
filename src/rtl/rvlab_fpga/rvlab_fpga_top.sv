@@ -144,16 +144,18 @@ module rvlab_fpga_top (
   // TL-UL DDR3 external memory controller
   // -------------------------------------
 
-  tlul_pkg::tl_h2d_t tl_ddr_h2d, tl_ddr_ctrl_h2d;
-  tlul_pkg::tl_d2h_t tl_ddr_d2h, tl_ddr_ctrl_d2h;
+  rvlab_ddr_pkg::ddr3_h2d_t ddr_h2d;
+  rvlab_ddr_pkg::ddr3_d2h_t ddr_d2h;
+  tlul_pkg::tl_h2d_t tl_ddr_ctrl_h2d;
+  tlul_pkg::tl_d2h_t tl_ddr_ctrl_d2h;
 
   rvlab_tlul_ddr tlul_ddr_i (
     .clk_i           (sys_clk),
     .clk_100mhz_i    (clk_100mhz_buffered),
     .rst_ni          (sys_rst_n),
 
-    .tl_i            (tl_ddr_h2d),
-    .tl_o            (tl_ddr_d2h),
+    .req_i           (ddr_h2d),
+    .rsp_o           (ddr_d2h),
     .tl_ctrl_i       (tl_ddr_ctrl_h2d),
     .tl_ctrl_o       (tl_ddr_ctrl_d2h),
 
@@ -396,7 +398,8 @@ module rvlab_fpga_top (
   // ----
 
   rvlab_core core_i (
-    .clk_i(sys_clk),
+    .clk_i       (sys_clk),
+    .clk_100mhz_i(clk_100mhz_buffered),
 
     .rst_ni    (sys_rst_n),
     .rst_dbg_ni(dbg_rst_n),
@@ -408,8 +411,8 @@ module rvlab_fpga_top (
     .jtag_tms_i,
     .jtag_trst_ni,
 
-    .tl_ddr_o     (tl_ddr_h2d),
-    .tl_ddr_i     (tl_ddr_d2h),
+    .ddr_o        (ddr_h2d),
+    .ddr_i        (ddr_d2h),
     .tl_ddr_ctrl_o(tl_ddr_ctrl_h2d),
     .tl_ddr_ctrl_i(tl_ddr_ctrl_d2h),
 

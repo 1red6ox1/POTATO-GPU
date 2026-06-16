@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: SHL-2.1
+// SPDX-FileCopyrightText: 2026 David Schröder
+
+{
+  name: "hdmi_ctrl"
+  clock_primary: "sys_clk"
+  bus_device: "tlul"
+  regwidth: "32"
+  registers: [
+    {
+      name: "ctrl"
+      desc: "Control"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "0", name: "phy_enable", resval: "0", desc: "HDMI PHY enable"}
+        {bits: "1", name: "fetch_enable", resval: "0", desc: "Pixel Prefetch FIFO enable"}
+      ]
+    },
+    {
+      name: "hpd"
+      desc: "HPD Status"
+      swaccess: "ro"
+      hwaccess: "hwo"
+      fields: [
+        {bits: "0", name: "val", desc: "value"}
+      ]
+    },
+    {
+      name: "fbid"
+      desc: "Next-Frame Frame Buffer ID"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "1:0", name: "val", resval: "0", desc: "Value"}
+      ]
+    }
+  ]
+}

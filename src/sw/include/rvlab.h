@@ -27,7 +27,16 @@ int ddr_init(void);
 #include <reggen/student_dma.h>
 #define STUDENT_DMA0_BASE_ADDR 0x20000000
 
-// Add includes for additional register definition headers
-// and define corresponding _BASE_ADDR values here.
+#include <reggen/student_rlight.h>
+#define STUDENT_RLIGHT0_BASE_ADDR 0x10000000
+
+#include <reggen/student_irq_ctrl.h>
+#define STUDENT_IRQ_CTRL0_BASE_ADDR 0x10100000
+
+#include <reggen/hdmi_ctrl.h>
+#define HDMI_CTRL0_BASE_ADDR 0x10200000
+
+#include <reggen/frameclear_dma.h>
+#define FRAMECLEAR_DMA0_BASE_ADDR 0x10300000
 
 #endif // _RVLAB_H

@@ -1,0 +1,84 @@
+{
+	name: "student_irq_ctrl"
+	clock_primary: "sys_clk"
+	bus_device: "tlul"
+	regwidth: "32"
+	registers: [
+		{
+			name: "all_en"
+			desc: "0: suppresses all outgoing interrupt requests"
+			swaccess: "rw"
+			hwaccess: "hro"
+			resval: "1"
+			fields: [
+				{bits: "0:0", name: "en_irq", desc: "enable"}
+			]
+		}
+		{
+			name: "mask"
+			desc: "mask(n) = 1 <=> irq(n) enabled"
+			swaccess: "rw"
+			hwaccess: "hrw"
+			hwqe: "true"
+			fields: [
+				{bits: "31:0", name: "val", desc: "mask value"}
+			]
+		}
+		{
+			name: "mask_set"
+			desc: "mask(n) = 1 <=> set bit n in mask"
+			swaccess: "wo"
+			hwaccess: "hro"
+			hwqe: "true"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "mask_clr"
+			desc: "mask_clr(n) = 1 <=> clear bit n in mask"
+			swaccess: "wo"
+			hwaccess: "hro"
+			hwqe: "true"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "status"
+			desc: "status(n) = 1 <=> irq(n) is asserted"
+			swaccess: "ro"
+			hwaccess: "hwo"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "irq_no"
+			desc: "n < IRQ_MAX: irq_no = n, irq(n) = 1 and there is no m < n with irq(m) = 1 and mask(m) = 1. n = IRQ_MAX: no pending unmasked irq"
+			swaccess: "ro"
+			hwaccess: "hwo"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "test"
+			desc: "0: regular operation; 1: all irq inputs are wired to the test_irq register"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "0:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "test_irq"
+			desc: "see test"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+	]
+}

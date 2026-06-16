@@ -1,0 +1,48 @@
+{
+    name: "student_rlight"
+    clock_primary: "sys_clk"
+    bus_device: "tlul"
+    regwidth: "32"
+    registers: [
+        {
+            name: "reg_n"
+            desc: "delay-cycles between LED pattern updates"
+            swaccess: "rw"
+            hwaccess: "hro"
+            hwqe: "true"
+            fields: [
+                {bits: "31:0", name: "n", desc: "delay-cycles between LED pattern updates"}
+            ]   
+        }
+        {
+            name: "reg_mode"
+            desc: "LED pattern mode"
+            swaccess: "rw"
+            hwaccess: "hro"
+            hwqe: "true"
+            fields: [
+                {bits: "1:0", name: "mode", desc: "LED pattern mode (00 - left; 01 - right; 10 - pingpong; 11 - stop)"}
+            ]   
+        }
+        {
+            name: "reg_pattern"
+            desc: "LED pattern data"
+            swaccess: "rw"
+            hwaccess: "hro"
+            hwqe: "true"
+            fields: [
+               {bits: "7:0", name: "pattern", desc: "LED pattern data"}
+            ]   
+        }
+        {
+            name: "reg_status"
+            desc: "Status register (read-only)"
+            swaccess: "ro"
+            hwaccess: "hrw"
+            hwqe: "true"
+            fields: [
+                {bits: "7:0", name: "status", desc: "current LED pattern being displayed"}
+            ]
+        }
+    ]
+}
