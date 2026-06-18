@@ -1,0 +1,279 @@
+// SPDX-License-Identifier: SHL-2.1
+// SPDX-FileCopyrightText: 2024 RVLab Contributors
+
+module matmul_tb;
+  localparam int DATA_WIDTH = 32;
+  localparam int FRAC_WIDTH = 16;
+  localparam int OUT_WIDTH = DATA_WIDTH;
+  localparam int PROD_WIDTH = DATA_WIDTH * 2;
+  localparam int ACC_WIDTH = PROD_WIDTH + 2;
+  localparam int MAT_DIM = 4;
+
+  typedef logic signed [DATA_WIDTH-1:0] data_t;
+  typedef logic signed [OUT_WIDTH-1:0] out_t;
+  typedef logic signed [ACC_WIDTH-1:0] acc_t;
+  typedef data_t matrix_t[MAT_DIM][MAT_DIM];
+  typedef data_t vector_t[MAT_DIM];
+  typedef out_t out_vector_t[MAT_DIM];
+
+  logic clk;
+  logic rst_n;
+  logic in_valid;
+  logic out_valid;
+  matrix_t mat_A;
+  vector_t vec_B;
+  out_vector_t mat_C;
+
+  int unsigned errcnt;
+
+  // 50 MHz
+  always begin
+    clk = '1;
+    #10000;
+    clk = '0;
+    #10000;
+  end
+
+  matmul #(
+      .DATA_WIDTH(DATA_WIDTH),
+      .FRAC_WIDTH(FRAC_WIDTH),
+      .OUT_WIDTH (OUT_WIDTH)
+  ) DUT (
+      .clk      (clk),
+      .rst_n    (rst_n),
+      .in_valid (in_valid),
+      .mat_A    (mat_A),
+      .vec_B    (vec_B),
+      .out_valid(out_valid),
+      .mat_C    (mat_C)
+  );
+
+  function automatic data_t q16(input int value);
+    return data_t'(value <<< FRAC_WIDTH);
+  endfunction
+
+  function automatic out_t saturate_expected(input acc_t acc);
+    acc_t shifted;
+    acc_t max_value;
+    acc_t min_value;
+  begin
+    shifted   = acc >>> FRAC_WIDTH;
+    max_value = $signed({{(ACC_WIDTH-OUT_WIDTH){1'b0}}, {1'b0, {(OUT_WIDTH-1){1'b1}}}});
+    min_value = $signed({{(ACC_WIDTH-OUT_WIDTH){1'b1}}, {1'b1, {(OUT_WIDTH-1){1'b0}}}});
+
+    if (shifted > max_value) begin
+      saturate_expected = {1'b0, {(OUT_WIDTH-1){1'b1}}};
+    end else if (shifted < min_value) begin
+      saturate_expected = {1'b1, {(OUT_WIDTH-1){1'b0}}};
+    end else begin
+      saturate_expected = shifted[OUT_WIDTH-1:0];
+    end
+  end
+  endfunction
+
+  function automatic out_vector_t calc_expected(input matrix_t a, input vector_t b);
+    out_vector_t result;
+    acc_t acc;
+
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      acc = '0;
+      for (int j = 0; j < MAT_DIM; j = j + 1) begin
+        acc = acc + (ACC_WIDTH'(a[i][j]) * ACC_WIDTH'(b[j]));
+      end
+      result[i] = saturate_expected(acc);
+    end
+
+    return result;
+  endfunction
+
+  task automatic clear_inputs();
+    in_valid = 1'b0;
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      vec_B[i] = '0;
+      for (int j = 0; j < MAT_DIM; j = j + 1) begin
+        mat_A[i][j] = '0;
+      end
+    end
+  endtask
+
+  task automatic reset_dut();
+    rst_n = 1'b0;
+    clear_inputs();
+    repeat (4) @(posedge clk);
+    #1;
+
+    if (out_valid !== 1'b0) begin
+      $error("out_valid is not low during reset");
+      errcnt = errcnt + 1;
+    end
+
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      if (mat_C[i] !== '0) begin
+        $error("mat_C[%0d] is not zero during reset: got %0d", i, mat_C[i]);
+        errcnt = errcnt + 1;
+      end
+    end
+
+    @(negedge clk);
+    rst_n = 1'b1;
+    @(posedge clk);
+  endtask
+
+  task automatic drive_input(input matrix_t a, input vector_t b);
+    @(negedge clk);
+    mat_A = a;
+    vec_B = b;
+    in_valid = 1'b1;
+    @(negedge clk);
+    in_valid = 1'b0;
+  endtask
+
+  task automatic drive_input_hold(input matrix_t a, input vector_t b);
+    mat_A = a;
+    vec_B = b;
+    in_valid = 1'b1;
+  endtask
+
+  task automatic check_output(input out_vector_t expected, input string test_name);
+    if (out_valid !== 1'b1) begin
+      $error("%s: out_valid is not asserted", test_name);
+      errcnt = errcnt + 1;
+    end
+
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      if (mat_C[i] !== expected[i]) begin
+        $error("%s: mat_C[%0d] mismatch: expected 0x%08x, got 0x%08x",
+            test_name, i, expected[i], mat_C[i]);
+        errcnt = errcnt + 1;
+      end
+    end
+  endtask
+
+  task automatic wait_and_check(input out_vector_t expected, input string test_name);
+    repeat (3) begin
+      @(posedge clk);
+      #1;
+      if (out_valid !== 1'b0) begin
+        $error("%s: out_valid asserted too early", test_name);
+        errcnt = errcnt + 1;
+      end
+    end
+
+    @(posedge clk);
+    #1;
+    check_output(expected, test_name);
+
+    @(posedge clk);
+    #1;
+    if (out_valid !== 1'b0) begin
+      $error("%s: out_valid stayed high after one cycle", test_name);
+      errcnt = errcnt + 1;
+    end
+  endtask
+
+  task automatic init_identity(output matrix_t m);
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      for (int j = 0; j < MAT_DIM; j = j + 1) begin
+        m[i][j] = (i == j) ? q16(1) : data_t'(0);
+      end
+    end
+  endtask
+
+  task automatic init_counting_vector(output vector_t v);
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      v[i] = q16(i + 1);
+    end
+  endtask
+
+  task automatic init_signed_pattern(output matrix_t a, output vector_t b);
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      b[i] = q16(i - 2);
+      for (int j = 0; j < MAT_DIM; j = j + 1) begin
+        a[i][j] = q16((i * 2) - j);
+      end
+    end
+  endtask
+
+  task automatic init_saturation_case(output matrix_t a, output vector_t b);
+    for (int i = 0; i < MAT_DIM; i = i + 1) begin
+      b[i] = q16(4);
+      for (int j = 0; j < MAT_DIM; j = j + 1) begin
+        a[i][j] = q16(8192);
+      end
+    end
+  endtask
+
+  initial begin
+    matrix_t a0;
+    vector_t b0;
+    matrix_t a1;
+    vector_t b1;
+    out_vector_t exp0;
+    out_vector_t exp1;
+
+    errcnt = '0;
+    reset_dut();
+
+    init_identity(a0);
+    init_counting_vector(b0);
+    exp0 = calc_expected(a0, b0);
+    drive_input(a0, b0);
+    wait_and_check(exp0, "identity_times_vector");
+
+    init_signed_pattern(a0, b0);
+    exp0 = calc_expected(a0, b0);
+    drive_input(a0, b0);
+    wait_and_check(exp0, "signed_pattern");
+
+    init_saturation_case(a0, b0);
+    exp0 = calc_expected(a0, b0);
+    drive_input(a0, b0);
+    wait_and_check(exp0, "saturation_case");
+
+    init_identity(a0);
+    init_counting_vector(b0);
+    init_signed_pattern(a1, b1);
+    exp0 = calc_expected(a0, b0);
+    exp1 = calc_expected(a1, b1);
+
+    @(negedge clk);
+    drive_input_hold(a0, b0);
+    @(negedge clk);
+    drive_input_hold(a1, b1);
+    @(negedge clk);
+    in_valid = 1'b0;
+
+    repeat (2) begin
+      @(posedge clk);
+      #1;
+      if (out_valid !== 1'b0) begin
+        $error("back_to_back: out_valid asserted too early");
+        errcnt = errcnt + 1;
+      end
+    end
+
+    @(posedge clk);
+    #1;
+    check_output(exp0, "back_to_back_first");
+
+    @(posedge clk);
+    #1;
+    check_output(exp1, "back_to_back_second");
+
+    @(posedge clk);
+    #1;
+    if (out_valid !== 1'b0) begin
+      $error("back_to_back: out_valid stayed high after expected outputs");
+      errcnt = errcnt + 1;
+    end
+
+    if (errcnt > 0) begin
+      $display("### TESTS FAILED WITH %0d ERRORS ###", errcnt);
+    end else begin
+      $display("### TESTS PASSED ###");
+    end
+
+    $finish;
+  end
+
+endmodule
