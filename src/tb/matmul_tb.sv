@@ -3,15 +3,11 @@
 
 module matmul_tb;
   localparam int DATA_WIDTH = 32;
-  localparam int FRAC_WIDTH = 16;
   localparam int OUT_WIDTH = DATA_WIDTH;
-  localparam int PROD_WIDTH = DATA_WIDTH * 2;
-  localparam int ACC_WIDTH = PROD_WIDTH + 2;
   localparam int MAT_DIM = 4;
 
   typedef logic signed [DATA_WIDTH-1:0] data_t;
   typedef logic signed [OUT_WIDTH-1:0] out_t;
-  typedef logic signed [ACC_WIDTH-1:0] acc_t;
   typedef data_t matrix_t[MAT_DIM][MAT_DIM];
   typedef data_t vector_t[MAT_DIM];
   typedef out_t out_vector_t[MAT_DIM];
@@ -36,7 +32,7 @@ module matmul_tb;
 
   matmul #(
       .DATA_WIDTH(DATA_WIDTH),
-      .FRAC_WIDTH(FRAC_WIDTH),
+      .FRAC_WIDTH(16),
       .OUT_WIDTH (OUT_WIDTH)
   ) DUT (
       .clk      (clk),
@@ -47,44 +43,6 @@ module matmul_tb;
       .out_valid(out_valid),
       .mat_C    (mat_C)
   );
-
-  function automatic data_t q16(input int value);
-    return data_t'(value <<< FRAC_WIDTH);
-  endfunction
-
-  function automatic out_t saturate_expected(input acc_t acc);
-    acc_t shifted;
-    acc_t max_value;
-    acc_t min_value;
-  begin
-    shifted   = acc >>> FRAC_WIDTH;
-    max_value = $signed({{(ACC_WIDTH-OUT_WIDTH){1'b0}}, {1'b0, {(OUT_WIDTH-1){1'b1}}}});
-    min_value = $signed({{(ACC_WIDTH-OUT_WIDTH){1'b1}}, {1'b1, {(OUT_WIDTH-1){1'b0}}}});
-
-    if (shifted > max_value) begin
-      saturate_expected = {1'b0, {(OUT_WIDTH-1){1'b1}}};
-    end else if (shifted < min_value) begin
-      saturate_expected = {1'b1, {(OUT_WIDTH-1){1'b0}}};
-    end else begin
-      saturate_expected = shifted[OUT_WIDTH-1:0];
-    end
-  end
-  endfunction
-
-  function automatic out_vector_t calc_expected(input matrix_t a, input vector_t b);
-    out_vector_t result;
-    acc_t acc;
-
-    for (int i = 0; i < MAT_DIM; i = i + 1) begin
-      acc = '0;
-      for (int j = 0; j < MAT_DIM; j = j + 1) begin
-        acc = acc + (ACC_WIDTH'(a[i][j]) * ACC_WIDTH'(b[j]));
-      end
-      result[i] = saturate_expected(acc);
-    end
-
-    return result;
-  endfunction
 
   task automatic clear_inputs();
     in_valid = 1'b0;
@@ -171,36 +129,79 @@ module matmul_tb;
     end
   endtask
 
-  task automatic init_identity(output matrix_t m);
-    for (int i = 0; i < MAT_DIM; i = i + 1) begin
-      for (int j = 0; j < MAT_DIM; j = j + 1) begin
-        m[i][j] = (i == j) ? q16(1) : data_t'(0);
-      end
-    end
+  task automatic set_identity_case(
+      output matrix_t a,
+      output vector_t b,
+      output out_vector_t expected
+  );
+    a = '{
+        '{32'sh0001_0000, 32'sh0000_0000, 32'sh0000_0000, 32'sh0000_0000},
+        '{32'sh0000_0000, 32'sh0001_0000, 32'sh0000_0000, 32'sh0000_0000},
+        '{32'sh0000_0000, 32'sh0000_0000, 32'sh0001_0000, 32'sh0000_0000},
+        '{32'sh0000_0000, 32'sh0000_0000, 32'sh0000_0000, 32'sh0001_0000}
+    };
+    b = '{
+        32'sh0001_0000,
+        32'sh0002_0000,
+        32'sh0003_0000,
+        32'sh0004_0000
+    };
+    expected = '{
+        32'sh0001_0000,
+        32'sh0002_0000,
+        32'sh0003_0000,
+        32'sh0004_0000
+    };
   endtask
 
-  task automatic init_counting_vector(output vector_t v);
-    for (int i = 0; i < MAT_DIM; i = i + 1) begin
-      v[i] = q16(i + 1);
-    end
+  task automatic set_signed_case(
+      output matrix_t a,
+      output vector_t b,
+      output out_vector_t expected
+  );
+    a = '{
+        '{32'sh0000_0000, 32'shffff_0000, 32'shfffe_0000, 32'shfffd_0000},
+        '{32'sh0002_0000, 32'sh0001_0000, 32'sh0000_0000, 32'shffff_0000},
+        '{32'sh0004_0000, 32'sh0003_0000, 32'sh0002_0000, 32'sh0001_0000},
+        '{32'sh0006_0000, 32'sh0005_0000, 32'sh0004_0000, 32'sh0003_0000}
+    };
+    b = '{
+        32'shfffe_0000,
+        32'shffff_0000,
+        32'sh0000_0000,
+        32'sh0001_0000
+    };
+    expected = '{
+        32'shfffe_0000,
+        32'shfffa_0000,
+        32'shfff6_0000,
+        32'shfff2_0000
+    };
   endtask
 
-  task automatic init_signed_pattern(output matrix_t a, output vector_t b);
-    for (int i = 0; i < MAT_DIM; i = i + 1) begin
-      b[i] = q16(i - 2);
-      for (int j = 0; j < MAT_DIM; j = j + 1) begin
-        a[i][j] = q16((i * 2) - j);
-      end
-    end
-  endtask
-
-  task automatic init_saturation_case(output matrix_t a, output vector_t b);
-    for (int i = 0; i < MAT_DIM; i = i + 1) begin
-      b[i] = q16(4);
-      for (int j = 0; j < MAT_DIM; j = j + 1) begin
-        a[i][j] = q16(8192);
-      end
-    end
+  task automatic set_saturation_case(
+      output matrix_t a,
+      output vector_t b,
+      output out_vector_t expected
+  );
+    a = '{
+        '{32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000},
+        '{32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000},
+        '{32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000},
+        '{32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000, 32'sh2000_0000}
+    };
+    b = '{
+        32'sh0004_0000,
+        32'sh0004_0000,
+        32'sh0004_0000,
+        32'sh0004_0000
+    };
+    expected = '{
+        32'sh7fff_ffff,
+        32'sh7fff_ffff,
+        32'sh7fff_ffff,
+        32'sh7fff_ffff
+    };
   endtask
 
   initial begin
@@ -214,27 +215,20 @@ module matmul_tb;
     errcnt = '0;
     reset_dut();
 
-    init_identity(a0);
-    init_counting_vector(b0);
-    exp0 = calc_expected(a0, b0);
+    set_identity_case(a0, b0, exp0);
     drive_input(a0, b0);
     wait_and_check(exp0, "identity_times_vector");
 
-    init_signed_pattern(a0, b0);
-    exp0 = calc_expected(a0, b0);
+    set_signed_case(a0, b0, exp0);
     drive_input(a0, b0);
     wait_and_check(exp0, "signed_pattern");
 
-    init_saturation_case(a0, b0);
-    exp0 = calc_expected(a0, b0);
+    set_saturation_case(a0, b0, exp0);
     drive_input(a0, b0);
     wait_and_check(exp0, "saturation_case");
 
-    init_identity(a0);
-    init_counting_vector(b0);
-    init_signed_pattern(a1, b1);
-    exp0 = calc_expected(a0, b0);
-    exp1 = calc_expected(a1, b1);
+    set_identity_case(a0, b0, exp0);
+    set_signed_case(a1, b1, exp1);
 
     @(negedge clk);
     drive_input_hold(a0, b0);
