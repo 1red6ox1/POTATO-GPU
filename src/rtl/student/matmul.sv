@@ -22,27 +22,6 @@ module matmul #(
     logic signed [ACC_WIDTH-1:0]  sum_lvl2 [3:0];
     logic [3:0] valid_pipe;
 
-    function automatic logic signed [OUT_WIDTH-1:0] saturate_to_output(
-        input logic signed [ACC_WIDTH-1:0] acc
-    );
-        logic signed [ACC_WIDTH-1:0] shifted;
-        logic signed [ACC_WIDTH-1:0] max_value;
-        logic signed [ACC_WIDTH-1:0] min_value;
-    begin
-        shifted   = acc >>> FRAC_WIDTH;
-        max_value = $signed({{(ACC_WIDTH-OUT_WIDTH){1'b0}}, {1'b0, {(OUT_WIDTH-1){1'b1}}}});
-        min_value = $signed({{(ACC_WIDTH-OUT_WIDTH){1'b1}}, {1'b1, {(OUT_WIDTH-1){1'b0}}}});
-
-        if (shifted > max_value) begin
-            saturate_to_output = {1'b0, {(OUT_WIDTH-1){1'b1}}};
-        end else if (shifted < min_value) begin
-            saturate_to_output = {1'b1, {(OUT_WIDTH-1){1'b0}}};
-        end else begin
-            saturate_to_output = shifted[OUT_WIDTH-1:0];
-        end
-    end
-    endfunction
-
     generate
         genvar row;
         genvar col;
@@ -85,7 +64,15 @@ module matmul #(
                     sum_lvl1[row][0] <= prod[row][0] + prod[row][1];
                     sum_lvl1[row][1] <= prod[row][2] + prod[row][3];
                     sum_lvl2[row]    <= sum_lvl1[row][0] + sum_lvl1[row][1];
-                    mat_C[row]       <= saturate_to_output(sum_lvl2[row]);
+                    mat_C[row]       <= ((sum_lvl2[row] >>> FRAC_WIDTH) >
+                                         $signed({{(ACC_WIDTH-OUT_WIDTH){1'b0}},
+                                         {1'b0, {(OUT_WIDTH-1){1'b1}}}})) ?
+                                        {1'b0, {(OUT_WIDTH-1){1'b1}}} :
+                                        (((sum_lvl2[row] >>> FRAC_WIDTH) <
+                                         $signed({{(ACC_WIDTH-OUT_WIDTH){1'b1}},
+                                         {1'b1, {(OUT_WIDTH-1){1'b0}}}})) ?
+                                        {1'b1, {(OUT_WIDTH-1){1'b0}}} :
+                                        sum_lvl2[row][FRAC_WIDTH+:OUT_WIDTH]);
                 end
             end
         end
