@@ -6,9 +6,11 @@ module matmul #(
     input  logic                              clk,
     input  logic                              rst_n,
     input  logic                              in_valid,
+    input  logic [31:0]                       in_id,
     input  logic signed [DATA_WIDTH-1:0]      mat_A [3:0][3:0],
     input  logic signed [DATA_WIDTH-1:0]      vec_B [3:0],
     output logic                              out_valid,
+    output logic [31:0]                       out_id,
     output logic signed [OUT_WIDTH-1:0]       mat_C [3:0]
 );
 
@@ -21,6 +23,7 @@ module matmul #(
     logic signed [PROD_WIDTH:0]   sum_lvl1 [3:0][1:0];
     logic signed [ACC_WIDTH-1:0]  sum_lvl2 [3:0];
     logic [3:0] valid_pipe;
+    logic [31:0] id_pipe [3:0];
 
     generate
         genvar row;
@@ -82,9 +85,19 @@ module matmul #(
         if (!rst_n) begin
             valid_pipe <= '0;
             out_valid  <= 1'b0;
+            id_pipe[0] <= '0;
+            id_pipe[1] <= '0;
+            id_pipe[2] <= '0;
+            id_pipe[3] <= '0;
+            out_id     <= '0;
         end else begin
             valid_pipe <= {valid_pipe[2:0], in_valid};
             out_valid  <= valid_pipe[3];
+            id_pipe[0] <= in_id;
+            id_pipe[1] <= id_pipe[0];
+            id_pipe[2] <= id_pipe[1];
+            id_pipe[3] <= id_pipe[2];
+            out_id     <= id_pipe[3];
         end
     end
 

@@ -16,6 +16,8 @@ module matmul_tb;
   logic rst_n;
   logic in_valid;
   logic out_valid;
+  logic [31:0] in_id;
+  logic [31:0] out_id;
   matrix_t mat_A;
   vector_t vec_B;
   out_vector_t mat_C;
@@ -38,14 +40,17 @@ module matmul_tb;
       .clk      (clk),
       .rst_n    (rst_n),
       .in_valid (in_valid),
+      .in_id    (in_id),
       .mat_A    (mat_A),
       .vec_B    (vec_B),
       .out_valid(out_valid),
+      .out_id   (out_id),
       .mat_C    (mat_C)
   );
 
   task automatic clear_inputs();
     in_valid = 1'b0;
+    in_id = '0;
     for (int i = 0; i < MAT_DIM; i = i + 1) begin
       vec_B[i] = '0;
       for (int j = 0; j < MAT_DIM; j = j + 1) begin
@@ -65,6 +70,11 @@ module matmul_tb;
       errcnt = errcnt + 1;
     end
 
+    if (out_id !== '0) begin
+      $error("out_id is not zero during reset: got 0x%08x", out_id);
+      errcnt = errcnt + 1;
+    end
+
     for (int i = 0; i < MAT_DIM; i = i + 1) begin
       if (mat_C[i] !== '0) begin
         $error("mat_C[%0d] is not zero during reset: got %0d", i, mat_C[i]);
@@ -77,24 +87,36 @@ module matmul_tb;
     @(posedge clk);
   endtask
 
-  task automatic drive_input(input matrix_t a, input vector_t b);
+  task automatic drive_input(input matrix_t a, input vector_t b, input logic [31:0] id);
     @(negedge clk);
     mat_A = a;
     vec_B = b;
+    in_id = id;
     in_valid = 1'b1;
     @(negedge clk);
     in_valid = 1'b0;
   endtask
 
-  task automatic drive_input_hold(input matrix_t a, input vector_t b);
+  task automatic drive_input_hold(input matrix_t a, input vector_t b, input logic [31:0] id);
     mat_A = a;
     vec_B = b;
+    in_id = id;
     in_valid = 1'b1;
   endtask
 
-  task automatic check_output(input out_vector_t expected, input string test_name);
+  task automatic check_output(
+      input out_vector_t expected,
+      input logic [31:0] expected_id,
+      input string test_name
+  );
     if (out_valid !== 1'b1) begin
       $error("%s: out_valid is not asserted", test_name);
+      errcnt = errcnt + 1;
+    end
+
+    if (out_id !== expected_id) begin
+      $error("%s: out_id mismatch: expected 0x%08x, got 0x%08x",
+          test_name, expected_id, out_id);
       errcnt = errcnt + 1;
     end
 
@@ -107,7 +129,11 @@ module matmul_tb;
     end
   endtask
 
-  task automatic wait_and_check(input out_vector_t expected, input string test_name);
+  task automatic wait_and_check(
+      input out_vector_t expected,
+      input logic [31:0] expected_id,
+      input string test_name
+  );
     repeat (3) begin
       @(posedge clk);
       #1;
@@ -119,7 +145,7 @@ module matmul_tb;
 
     @(posedge clk);
     #1;
-    check_output(expected, test_name);
+    check_output(expected, expected_id, test_name);
 
     @(posedge clk);
     #1;
@@ -211,29 +237,36 @@ module matmul_tb;
     vector_t b1;
     out_vector_t exp0;
     out_vector_t exp1;
+    logic [31:0] id0;
+    logic [31:0] id1;
 
     errcnt = '0;
     reset_dut();
 
     set_identity_case(a0, b0, exp0);
-    drive_input(a0, b0);
-    wait_and_check(exp0, "identity_times_vector");
+    id0 = 32'h1234_0001;
+    drive_input(a0, b0, id0);
+    wait_and_check(exp0, id0, "identity_times_vector");
 
     set_signed_case(a0, b0, exp0);
-    drive_input(a0, b0);
-    wait_and_check(exp0, "signed_pattern");
+    id0 = 32'h1234_0002;
+    drive_input(a0, b0, id0);
+    wait_and_check(exp0, id0, "signed_pattern");
 
     set_saturation_case(a0, b0, exp0);
-    drive_input(a0, b0);
-    wait_and_check(exp0, "saturation_case");
+    id0 = 32'h1234_0003;
+    drive_input(a0, b0, id0);
+    wait_and_check(exp0, id0, "saturation_case");
 
     set_identity_case(a0, b0, exp0);
     set_signed_case(a1, b1, exp1);
+    id0 = 32'hcafe_0001;
+    id1 = 32'hcafe_0002;
 
     @(negedge clk);
-    drive_input_hold(a0, b0);
+    drive_input_hold(a0, b0, id0);
     @(negedge clk);
-    drive_input_hold(a1, b1);
+    drive_input_hold(a1, b1, id1);
     @(negedge clk);
     in_valid = 1'b0;
 
@@ -248,11 +281,11 @@ module matmul_tb;
 
     @(posedge clk);
     #1;
-    check_output(exp0, "back_to_back_first");
+    check_output(exp0, id0, "back_to_back_first");
 
     @(posedge clk);
     #1;
-    check_output(exp1, "back_to_back_second");
+    check_output(exp1, id1, "back_to_back_second");
 
     @(posedge clk);
     #1;
