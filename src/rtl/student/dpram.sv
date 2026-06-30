@@ -31,11 +31,7 @@ module dpram #(
         end
 
         if (r_en) begin
-            if (rw_en && rw_we && (rw_addr == r_addr)) begin
-                r_data_out <= rw_data_in;
-            end else begin
-                r_data_out <= ram[r_addr];
-            end
+            r_data_out <= ram[r_addr];
         end
     end
 
