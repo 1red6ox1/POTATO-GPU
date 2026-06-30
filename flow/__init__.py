@@ -59,7 +59,8 @@ module_tbs = [
     "student_rlight_tb",
     "student_tlul_mux_tb",
     "matmul_tb",
-    "hdmi_tb"
+    "hdmi_tb",
+    "dpram_tb",
 ]
 
 for name in module_tbs:
