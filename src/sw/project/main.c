@@ -36,10 +36,75 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
     //printf("\rFPS: %u.%u", fps_x10/10, fps_x10%10);
 
     last_frame = finish;
-
-    REG32(HDMI_CTRL_FBID(0)) = fbid;
 }
 
+typedef vec4_t triangle_t[3];
+
+void viewport_transform(vec4_t clip, uint16_t* x, uint16_t* y) {
+    fixed_t ndc_x = fixed_div(clip[0], clip[3]);
+    fixed_t ndc_y = fixed_div(clip[1], clip[3]);
+    fixed_t screen_x = ((ndc_x + (1<<16)) >> 1) * 1920;
+    fixed_t screen_y = ((ndc_y + (1<<16)) >> 1) * 1080;
+    *x = screen_x >> 16;
+    *y = 1080 - (screen_y >> 16);
+}
+
+void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
+    uint8_t cxo = x & 0x1F;
+    uint8_t cxb = x >> 5;
+    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
+    uint32_t addr_g = addr_r | (1 << 5);
+    uint32_t addr_b = addr_r | (2 << 5);
+    *((uint8_t*)addr_r) = r;
+    *((uint8_t*)addr_g) = g;
+    *((uint8_t*)addr_b) = b;
+
+    uint32_t block_r = addr_r & 0xFFFFFFE0;
+    uint32_t block_g = addr_g & 0xFFFFFFE0;
+    uint32_t block_b = addr_b & 0xFFFFFFE0;
+}
+
+void render_line(uint8_t fbid, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+    int16_t dx = x0 < x1 ? x1 - x0 : x0 - x1;
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = y0 < y1 ? y0 - y1 : y1 - y0;
+    int16_t sy = y0 < y1 ? 1 : -1;
+    int16_t err = dx + dy;
+    int16_t err2;
+
+    while (1) {
+        if (x0 < 0 || y0 < 0) break;
+        set_pixel(fbid, x0, y0, 255, 255, 255);
+        err2 = err * 2;
+        if (err2 >= dy) {
+            if (x0 == x1) break;
+            err = err + dy;
+            x0 = x0 + sx;
+        }
+        if (err2 <= dx) {
+            if (y0 == y1) break;
+            err = err + dx;
+            y0 = y0 + sy;
+        }
+    }
+}
+
+void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
+    vec4_t clip_p0, clip_p1, clip_p2;
+    uint16_t x0, x1, x2;
+    uint16_t y0, y1, y2;
+    mat_vec_mul(clip_p0, VP, tri[0]);
+    mat_vec_mul(clip_p1, VP, tri[1]);
+    mat_vec_mul(clip_p2, VP, tri[2]);
+    viewport_transform(clip_p0, &x0, &y0);
+    viewport_transform(clip_p1, &x1, &y1);
+    viewport_transform(clip_p2, &x2, &y2);
+    render_line(fbid, x0, y0, x1, y1);
+    render_line(fbid, x1, y1, x2, y2);
+    render_line(fbid, x2, y2, x0, y0);
+    // Flush DDR cache
+    for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
+}
 
 int main(void) {
     ddr_init();
@@ -51,66 +116,41 @@ int main(void) {
 
     fixed_t inverse_aspect = (fixed_t)0x00009000; // 9/16
 
+    vec3_t camera_pos = {F(5), F(2), F(-5)};
+
     matrix_t view_mat, proj_mat, VP;
-    lookat_mat(view_mat, V3(2, 3, 5), V3(2, 3, 0), V3(0, 1, 0));
-    persp_proj_mat(proj_mat, 90, 1 << 16, 100 << 16, 1 << 16);
-    mat_mat_mul(VP, proj_mat, view_mat);
+    persp_proj_mat(proj_mat, 60, inverse_aspect, 100 << 16, 1 << 14); // near = 0.25 far = 100
 
-    printf("VIEW:\n");
-    mat_print(view_mat);
-    printf("PROJ:\n");
-    mat_print(proj_mat);
-    printf("VP:\n");
-    mat_print(VP);
-
-    vec4_t vert = V4(4, 5, 2, 1);
-    vec4_t vert_clip;
-
-    mat_vec_mul(vert_clip, VP, vert);
-
-    printf("VERT:\n");
-    vec4_print(vert);
-    printf("VERT CLIP:\n");
-    vec4_print(vert_clip);
-
-    return 0;
-
+    uint8_t fbid = 0;
+    
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB); // Enable HDMI output
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
-
-    uint32_t r = 255;
-    uint32_t g = 0;
-    uint32_t b = 0;
-
-    uint32_t fbid = 1;
-
-    last_frame = read_csr("mcycle");
+    REG32(HDMI_CTRL_FBID(0)) = 0;
 
     while (1) {
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, ++g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, --r, g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, g, ++b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, --g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, ++r, g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, g, --b);
-            fbid = 1 - fbid;
-        }
+        cmd_clear_fb(fbid, 0, 0, 0);
+
+        // Projection matrix stays the same, adjust view matrix and regenerate VP
+        lookat_mat(view_mat, camera_pos, V3(0, 0, 0), V3(0, 1, 0));
+        mat_mat_mul(VP, proj_mat, view_mat);
+
+        camera_pos[2] = camera_pos[2] + 0x00000400;
+        if (camera_pos[2] > (5 << 16)) camera_pos[2] = -5 << 16;
+
+        render_tri((triangle_t){
+            V4(0, 0, 0, 1),
+            V4(1, 0, 0, 1),
+            V4(1, 1, 0, 1)
+        }, VP, fbid);
+
+        render_tri((triangle_t){
+            V4(2, 0, 0, 1),
+            V4(3, 0, 0, 1),
+            V4(3, 1, 0, 1)
+        }, VP, fbid);
+
+        REG32(HDMI_CTRL_FBID(0)) = fbid;
+        fbid = (fbid + 1) % 4;
     }
 
     return 0;
