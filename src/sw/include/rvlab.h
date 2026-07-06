@@ -39,4 +39,7 @@ int ddr_init(void);
 #include <reggen/frameclear_dma.h>
 #define FRAMECLEAR_DMA0_BASE_ADDR 0x10300000
 
+#include <reggen/matmul_ctrl.h>
+#define MATMUL_CTRL0_BASE_ADDR 0x10400000
+
 #endif // _RVLAB_H

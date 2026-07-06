@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <rvlab.h>
 
+#include "graphics_math.h"
+
 uint32_t last_frame;
 
 void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned char b) {
@@ -42,6 +44,36 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
 int main(void) {
     ddr_init();
     printf("HDMI HPD Status: %d\n", REG32(HDMI_CTRL_HPD(0)));
+
+    #define F(x) ((x) << 16)
+    #define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
+    #define V4(x, y, z, w) {F(x), F(y), F(z), F(w)}
+
+    fixed_t inverse_aspect = (fixed_t)0x00009000; // 9/16
+
+    matrix_t view_mat, proj_mat, VP;
+    lookat_mat(view_mat, V3(2, 3, 5), V3(2, 3, 0), V3(0, 1, 0));
+    persp_proj_mat(proj_mat, 90, 1 << 16, 100 << 16, 1 << 16);
+    mat_mat_mul(VP, proj_mat, view_mat);
+
+    printf("VIEW:\n");
+    mat_print(view_mat);
+    printf("PROJ:\n");
+    mat_print(proj_mat);
+    printf("VP:\n");
+    mat_print(VP);
+
+    vec4_t vert = V4(4, 5, 2, 1);
+    vec4_t vert_clip;
+
+    mat_vec_mul(vert_clip, VP, vert);
+
+    printf("VERT:\n");
+    vec4_print(vert);
+    printf("VERT CLIP:\n");
+    vec4_print(vert_clip);
+
+    return 0;
 
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB); // Enable HDMI output
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
