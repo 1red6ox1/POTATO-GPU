@@ -1,24 +1,24 @@
 // Copyright POTATO GPU Contributors 2026.
 
-module matmul
-	import tlul_pkg::*;
-(
+module matmul #(
+	parameter int ID_WIDTH = 16
+) (
 	input  logic clk_i,
 	input  logic rst_ni,
 
-	input  tl_h2d_t tl_ctrl_i,
-	output tl_d2h_t tl_ctrl_o,
+	input  tlul_pkg::tl_h2d_t tl_ctrl_i,
+	output tlul_pkg::tl_d2h_t tl_ctrl_o,
 
 	input  logic signed [31:0] data_i [3:0],
 	output logic signed [31:0] data_o [3:0],
 
-	input  logic        valid_i,
-	input  logic [15:0] id_i,
-	output logic        ready_o,
+	input  logic                  valid_i,
+	input  logic [ID_WIDTH-1:0]   id_i,
+	output logic                  ready_o,
 
-	output logic        valid_o,
-	output logic [15:0] id_o,
-	input  logic        ready_i
+	output logic                  valid_o,
+	output logic [ID_WIDTH-1:0]   id_o,
+	input  logic                  ready_i
 );
 
 	import matmul_ctrl_reg_pkg::*;
@@ -36,6 +36,12 @@ module matmul
 
 	logic signed [31:0] matrix      [3:0][3:0];
 	logic signed [63:0] mult_result [3:0][3:0];
+	logic [1:0] valid_shift;
+	logic [ID_WIDTH-1:0] id_shift [1:0];
+
+	assign ready_o = ready_i;
+	assign valid_o = valid_shift[1];
+	assign id_o = id_shift[1];
 
 	// Row-major order
 	assign matrix[0][0] = $signed(reg2hw.mat_0_0.q);
@@ -63,7 +69,15 @@ module matmul
 				end
 				data_o[i] <= '0;
 			end
-		end else begin
+			valid_shift <= '0;
+			for (int stage = 0; stage < 2; stage++) begin
+				id_shift[stage] <= '0;
+			end
+		end else if (ready_i) begin
+			valid_shift <= {valid_shift[0], valid_i};
+			id_shift[0] <= id_i;
+			id_shift[1] <= id_shift[0];
+
 			for (int i = 0; i < 4; i++) begin
 				for (int j = 0; j < 4; j++) begin
 					mult_result[i][j] <= matrix[i][j] * data_i[j];

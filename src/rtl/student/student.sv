@@ -164,7 +164,14 @@ module student (
     .tl_ctrl_o(tl_devices_d2h[4]),
 
     .data_i   ('{default: '0}),
-    .data_o   ()
+    .data_o   (),
+
+    .valid_i  (1'b0),
+    .id_i     ('0),
+    .ready_o  (),
+    .valid_o  (),
+    .id_o     (),
+    .ready_i  (1'b1)
   );
 
 endmodule

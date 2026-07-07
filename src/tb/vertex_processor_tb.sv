@@ -47,8 +47,7 @@ module vertex_processor_tb;
 
   vertex_processor #(
       .DATA_WIDTH(DATA_WIDTH),
-      .OUT_WIDTH (OUT_WIDTH),
-      .FIFO_DEPTH(16)
+      .OUT_WIDTH (OUT_WIDTH)
   ) DUT (
       .clk(clk),
       .rst_n(rst_n),
@@ -258,23 +257,32 @@ module vertex_processor_tb;
   task automatic wait_and_check_output(
       input logic [31:0] expected_id,
       input out_vector_t expected_vec,
-      input string name
+      input string name,
+      input logic expected_valid
   );
     int unsigned timeout;
     out_ready = 1'b1;
-    timeout = 0;
-    while (!out_valid && timeout < 200) begin
-      @(posedge clk);
-      timeout = timeout + 1;
-    end
-
-    if (!out_valid) begin
-      $error("%s: timeout waiting for out_valid", name);
-      errcnt = errcnt + 1;
-      return;
-    end
-
     #1;
+    if (expected_valid) begin
+      timeout = 0;
+      while (!out_valid && timeout < 200) begin
+        @(posedge clk);
+        #1;
+        timeout = timeout + 1;
+      end
+
+      if (!out_valid) begin
+        $error("%s: timeout waiting for out_valid", name);
+        errcnt = errcnt + 1;
+        return;
+      end
+    end
+
+    if (out_valid !== expected_valid) begin
+      $error("%s: out_valid mismatch, expected %0b got %0b", name, expected_valid, out_valid);
+      errcnt = errcnt + 1;
+    end
+
     if (out_id !== expected_id) begin
       $error("%s: out_id mismatch, expected 0x%08x got 0x%08x", name, expected_id, out_id);
       errcnt = errcnt + 1;
@@ -465,11 +473,12 @@ module vertex_processor_tb;
     set_world_vectors(world);
     set_camera_case(camera_id, matrix, expected);
 
-    out_ready = 1'b0;
+    out_ready = 1'b1;
     clear_cfg_matrix();
     write_cfg_matrix(matrix);
     check_cfg_matrix(matrix, $sformatf("camera%0d", camera_id));
 
+    out_ready = 1'b0;
     for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
       for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
         write_vector(TRI_ID_WIDTH'(triangle_idx), VTX_ID_WIDTH'(vtx),
@@ -480,7 +489,7 @@ module vertex_processor_tb;
     for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
       for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
         name = $sformatf("camera%0d_tri%0d_p%0d", camera_id, triangle_idx, vtx);
-        wait_and_check_output(32'(triangle_idx), expected[triangle_idx][vtx], name);
+        wait_and_check_output(32'(triangle_idx), expected[triangle_idx][vtx], name, vtx == 0);
       end
     end
   endtask
