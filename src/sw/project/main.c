@@ -34,7 +34,7 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
     uint32_t dt = finish - last_frame;
     uint32_t fps_x10 = 500000000 / dt;
 
-    //printf("\rFPS: %u.%u", fps_x10/10, fps_x10%10);
+    //printf("\rFPS: %u.%u     ", fps_x10/10, fps_x10%10);
 
     last_frame = finish;
 }
@@ -61,7 +61,18 @@ void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8
     *((uint8_t*)addr_b) = b;
 }
 
-void render_line(uint8_t fbid, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+void get_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t *r, uint8_t *g, uint8_t *b) {
+    uint8_t cxo = x & 0x1F;
+    uint8_t cxb = x >> 5;
+    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
+    uint32_t addr_g = addr_r | (1 << 5);
+    uint32_t addr_b = addr_r | (2 << 5);
+    *r = *((uint8_t*)addr_r);
+    *g = *((uint8_t*)addr_g);
+    *b = *((uint8_t*)addr_b);
+}
+
+void render_line(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     int16_t dx = x0 < x1 ? x1 - x0 : x0 - x1;
     int16_t sx = x0 < x1 ? 1 : -1;
     int16_t dy = y0 < y1 ? y0 - y1 : y1 - y0;
@@ -70,8 +81,9 @@ void render_line(uint8_t fbid, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y
     int16_t err2;
 
     while (1) {
-        if (x0 < 0 || y0 < 0) break;
-        set_pixel(fbid, x0, y0, 255, 255, 255);
+        if (x0 >= 0 && x0 < 1920 && y0 >= 0 && y0 < 1080) {
+            set_pixel(fbid, x0, y0, 255, 255, 255);
+        }
         err2 = err * 2;
         if (err2 >= dy) {
             if (x0 == x1) break;
@@ -86,6 +98,86 @@ void render_line(uint8_t fbid, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y
     }
 }
 
+int16_t clamp(int16_t x, int16_t low, int16_t high) {
+    if (x < low) return low;
+    if (x > high) return high;
+    return x;
+}
+
+typedef int32_t edgefn_coeffs[3];
+
+void gen_edgefn_coeffs(edgefn_coeffs dest, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+    dest[0] = y1 - y0;
+    dest[1] = x0 - x1;
+    dest[2] = x1 * y0 - x0 * y1;
+}
+
+int32_t edgefn(edgefn_coeffs coeffs, int32_t x, int32_t y) {
+    return coeffs[0] * x + coeffs[1] * y + coeffs[2];
+}
+
+void rasterize_tri(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+    int16_t min_x, max_x;
+    int16_t min_y, max_y;
+    min_x = x0;
+    if (x1 < min_x) min_x = x1;
+    if (x2 < min_x) min_x = x2;
+    max_x = x0;
+    if (x1 > max_x) max_x = x1;
+    if (x2 > max_x) max_x = x2;
+    min_y = y0;
+    if (y1 < min_y) min_y = y1;
+    if (y2 < min_y) min_y = y2;
+    max_y = y0;
+    if (y1 > max_y) max_y = y1;
+    if (y2 > max_y) max_y = y2;
+
+    min_x = clamp(min_x, 0, 1919);
+    max_x = clamp(max_x, 0, 1919);
+    min_y = clamp(min_y, 0, 1079);
+    max_y = clamp(max_y, 0, 1079);
+
+    edgefn_coeffs ab;
+    edgefn_coeffs bc;
+    edgefn_coeffs ca;
+
+    gen_edgefn_coeffs(ab, x0, y0, x1, y1);
+    gen_edgefn_coeffs(bc, x1, y1, x2, y2);
+    gen_edgefn_coeffs(ca, x2, y2, x0, y0);
+
+    int32_t ab_startval = edgefn(ab, min_x, min_y);
+    int32_t bc_startval = edgefn(bc, min_x, min_y);
+    int32_t ca_startval = edgefn(ca, min_x, min_y);
+
+    int32_t ab_val, bc_val, ca_val;
+
+    int32_t tri_area = edgefn(ab, x2, y2);
+    int32_t area_scaled = tri_area >> 8;
+
+    int32_t bary0, bary1, bary2;
+
+    for (int y = min_y; y <= max_y; y++) {
+        ab_val = ab_startval;
+        bc_val = bc_startval;
+        ca_val = ca_startval;
+
+        for (int x = min_x; x <= max_x; x++) {
+            if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
+                bary0 = ab_val / area_scaled;
+                bary1 = bc_val / area_scaled;
+                bary2 = ca_val / area_scaled;
+                set_pixel(fbid, x, y, bary0, bary1, bary2);
+            }
+            ab_val += ab[0];
+            bc_val += bc[0];
+            ca_val += ca[0];
+        }
+        ab_startval = ab_startval + ab[1];
+        bc_startval = bc_startval + bc[1];
+        ca_startval = ca_startval + ca[1];
+    }
+}
+
 void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
     vec4_t clip_p0, clip_p1, clip_p2;
     int16_t x0, x1, x2;
@@ -96,9 +188,9 @@ void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
     viewport_transform(clip_p0, &x0, &y0);
     viewport_transform(clip_p1, &x1, &y1);
     viewport_transform(clip_p2, &x2, &y2);
-    render_line(fbid, x0, y0, x1, y1);
-    render_line(fbid, x1, y1, x2, y2);
-    render_line(fbid, x2, y2, x0, y0);
+
+    rasterize_tri(fbid, x0, y0, x1, y1, x2, y2);
+
     // Flush DDR cache
     for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
 }
@@ -197,13 +289,13 @@ int main(void) {
     matrix_t view_mat, proj_mat, VP;
     persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
 
+    //testcases();
+
     uint8_t fbid = 0;
     
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB); // Enable HDMI output
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
     REG32(HDMI_CTRL_FBID(0)) = 0;
-
-    testcases();
 
     while (1) {
         cmd_clear_fb(fbid, 0, 0, 0);
@@ -217,14 +309,14 @@ int main(void) {
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(1, 0, 0, 1),
-            V4(1, 1, 0, 1)
+            V4(1, 1, 0, 1),
+            V4(1, 0, 0, 1)
         }, VP, fbid);
 
         render_tri((triangle_t){
             V4(2, 0, 0, 1),
-            V4(3, 0, 0, 1),
-            V4(3, 1, 0, 1)
+            V4(3, 3, 0, 1),
+            V4(3, 0, 0, 1)
         }, VP, fbid);
 
         REG32(HDMI_CTRL_FBID(0)) = fbid;
