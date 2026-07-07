@@ -413,6 +413,104 @@ module vertex_post_tb;
     check_result(name, prev_sx, prev_sy, prev_z, prev_iw);
   endtask
 
+  localparam int N_REF = 10;
+  localparam data_t REF_X [N_REF][3] = '{
+    '{32'sh00000000, 32'sh00000000, 32'sh00000000},
+    '{32'shffff0697, 32'sh00000000, 32'sh00000000},
+    '{32'sh00000000, 32'sh00006f8a, 32'sh00006f8a},
+    '{32'sh00000001, 32'sh00006f8a, 32'shffff9076},
+    '{32'sh00000000, 32'sh00000000, 32'sh00000000},
+    '{32'shffff0691, 32'sh00000000, 32'sh00000000},
+    '{32'sh00000000, 32'sh0000b05c, 32'sh0000b05c},
+    '{32'shfffdeeeb, 32'sh0000b05c, 32'shffff4fa4},
+    '{32'sh00000000, 32'sh0000f969, 32'sh0000f969},
+    '{32'shfffe0d2e, 32'sh0000f969, 32'shffff0697}
+  };
+  localparam data_t REF_Y [N_REF][3] = '{
+    '{32'sh00000000, 32'sh00000000, 32'sh0001bb67},
+    '{32'shfffe4499, 32'sh000376ce, 32'sh00000000},
+    '{32'sh00000000, 32'sh00013dfc, 32'sh000246f9},
+    '{32'shfffbdc0c, 32'sh00034ff6, 32'shfffec204},
+    '{32'sh00000008, 32'shfffe4aa1, 32'shfffe9386},
+    '{32'sh000321f1, 32'shfffedc6b, 32'sh0001b56f},
+    '{32'sh00000000, 32'shffff4afc, 32'sh0000b503},
+    '{32'shffff4afc, 32'sh00021f0a, 32'sh0000b504},
+    '{32'sh00000000, 32'sh00000000, 32'sh0001bb67},
+    '{32'shfffe4499, 32'sh000376ce, 32'sh00000000}
+  };
+  localparam data_t REF_Z [N_REF][3] = '{
+    '{32'sh00048616, 32'sh000384ce, 32'sh000384ce},
+    '{32'sh000688a6, 32'sh000384ce, 32'sh0005875e},
+    '{32'sh00034253, 32'sh0003cbd8, 32'sh0002fd90},
+    '{32'sh0002b8ce, 32'sh00022f48, 32'sh0002b8ce},
+    '{32'sh00059ca7, 32'sh0005725b, 32'sh00047493},
+    '{32'sh0006ef07, 32'sh000376cb, 32'sh0005c6f3},
+    '{32'sh0004b88b, 32'sh00042400, 32'sh00038f75},
+    '{32'sh0005e1a1, 32'sh0002faea, 32'sh00054d16},
+    '{32'sh000080f6, 32'sh000080f6, 32'sh000080f6},
+    '{32'shffff7fae, 32'sh000080f6, 32'sh000080f6}
+  };
+  localparam data_t REF_W [N_REF][3] = '{
+    '{32'sh00050000, 32'sh00040000, 32'sh00040000},
+    '{32'sh00070000, 32'sh00040000, 32'sh00060000},
+    '{32'sh0003bdda, 32'sh000446b0, 32'sh0003796f},
+    '{32'sh00033504, 32'sh0002ac2e, 32'sh00033504},
+    '{32'sh0006152e, 32'sh0005eb18, 32'sh0004ee94},
+    '{32'sh000765de, 32'sh0003f210, 32'sh00063f44},
+    '{32'sh00053235, 32'sh00049e68, 32'sh00040a9b},
+    '{32'sh000659cf, 32'sh000376ce, 32'sh0005c602},
+    '{32'sh00010000, 32'sh00010000, 32'sh00010000},
+    '{32'sh00000000, 32'sh00010000, 32'sh00010000}
+  };
+  localparam int REF_SX [N_REF][3] = '{
+    '{  960,   960,   960},
+    '{  826,   960,   960},
+    '{  960,  1057,  1080},
+    '{  960,  1116,   829},
+    '{  960,   960,   960},
+    '{  833,   960,   960},
+    '{  960,  1103,  1123},
+    '{  647,  1150,   845},
+    '{  960,  1895,  1895},
+    '{  959,  1895,    24}
+  };
+  localparam int REF_SY [N_REF][3] = '{
+    '{  540,   540,   307},
+    '{  674,    73,   540},
+    '{  540,   384,   187},
+    '{ 1238,  -129,   750},
+    '{  540,   696,   696},
+    '{  312,   696,   393},
+    '{  540,   623,   446},
+    '{  601,   210,   474},
+    '{  540,   540,  -395},
+    '{  541, -1330,   540}
+  };
+  localparam bit REF_CULL [N_REF] = '{0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+
+  task automatic drive_and_check_ref(input string name,
+                                       input vec3_t xv, input vec3_t yv,
+                                       input vec3_t zv, input vec3_t wv,
+                                       input int dsx [3], input int dsy [3]);
+    int cx, cy0, cy1;
+    drive_and_check(name, xv, yv, zv, wv);
+    for (int i = 0; i < 3; i++) begin
+      cx  = dsx[i]   < 0 ? 0 : (dsx[i]   > SCREEN_W-1 ? SCREEN_W-1 : dsx[i]);
+      cy0 = dsy[i]   < 0 ? 0 : (dsy[i]   > SCREEN_H-1 ? SCREEN_H-1 : dsy[i]);
+      cy1 = dsy[i]-1 < 0 ? 0 : (dsy[i]-1 > SCREEN_H-1 ? SCREEN_H-1 : dsy[i]-1);
+      if (int'(sx_o[i]) != cx) begin
+        $error("%s: sx_o[%0d] is %0d, software reference expects %0d",
+               name, i, sx_o[i], cx);
+        errcnt = errcnt + 1;
+      end
+      if (int'(sy_o[i]) != cy0 && int'(sy_o[i]) != cy1) begin
+        $error("%s: sy_o[%0d] is %0d, software reference expects %0d (or %0d)",
+               name, i, sy_o[i], cy0, cy1);
+        errcnt = errcnt + 1;
+      end
+    end
+  endtask
+
   initial begin
     vec3_t xv, yv, zv, wv;
     vec3_t xb, yb, zb, wb;
@@ -492,6 +590,20 @@ module vertex_post_tb;
 
     // Outputs must hold while idle
     check_hold("idle_hold");
+
+    for (int t = 0; t < N_REF; t++) begin
+      for (int i = 0; i < 3; i++) begin
+        xv[i] = REF_X[t][i];
+        yv[i] = REF_Y[t][i];
+        zv[i] = REF_Z[t][i];
+        wv[i] = REF_W[t][i];
+      end
+      if (REF_CULL[t])
+        drive_and_check_drop($sformatf("ref_%0d_cull", t), xv, yv, zv, wv);
+      else
+        drive_and_check_ref($sformatf("ref_%0d", t), xv, yv, zv, wv,
+                              REF_SX[t], REF_SY[t]);
+    end
 
     if (errcnt > 0) begin
       $display("### TESTS FAILED WITH %0d ERRORS ###", errcnt);
