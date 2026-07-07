@@ -9,8 +9,8 @@ module matmul
 	input  tl_h2d_t tl_ctrl_i,
 	output tl_d2h_t tl_ctrl_o,
 
-	input  logic [31:0] data_i [3:0],
-	output logic [31:0] data_o [3:0]
+	input  logic signed [31:0] data_i [3:0],
+	output logic signed [31:0] data_o [3:0]
 );
 
 	import matmul_ctrl_reg_pkg::*;

@@ -3,7 +3,6 @@
 
 module vertex_processor #(
     parameter int DATA_WIDTH = 32,
-    parameter int FRAC_WIDTH = 16,
     parameter int OUT_WIDTH  = DATA_WIDTH,
     parameter int FIFO_DEPTH = 16,
 
@@ -44,7 +43,6 @@ module vertex_processor #(
 
     localparam int FIFO_WIDTH = 32 + ADDR_WIDTH;
     localparam int VEC_SRAM_AW = ADDR_WIDTH + 2;
-    localparam logic [VTX_ID_WIDTH-1:0] ENDPOINT_LAST = VTX_ID_WIDTH'(2);
     localparam int FIFO_ADDR_LSB = 0;
     localparam int FIFO_ADDR_MSB = ADDR_WIDTH - 1;
     localparam int FIFO_ID_LSB   = ADDR_WIDTH;
@@ -58,9 +56,8 @@ module vertex_processor #(
 
     state_e state_q, state_d;
 
-    data_t cfg_matrix_q [3:0][3:0];
     data_t matmul_vec   [3:0];
-    out_t  matmul_out   [3:0];
+    logic [31:0] matmul_out   [3:0];
     out_t  out_vec_q    [3:0];
 
     logic [ADDR_WIDTH-1:0] ram_r_addr_q, ram_r_addr_d;
@@ -83,10 +80,10 @@ module vertex_processor #(
     logic ram_r_en;
     logic matmul_in_valid;
     logic matmul_out_valid;
+    logic [1:0] matmul_valid_pipe_q;
 
     logic out_buf_valid_q, out_buf_valid_d;
     logic [31:0] out_id_q, out_id_d;
-    logic [31:0] matmul_out_id;
     out_t out_vec_d [3:0];
 
     logic vec_req;
@@ -104,14 +101,6 @@ module vertex_processor #(
     logic vec_read_pending_q;
     logic [1:0] vec_read_lane_q;
 
-    logic cfg_rsp_valid_q;
-    logic [31:0] cfg_rsp_data_q;
-    tlul_pkg::tl_d_op_e cfg_rsp_opcode_q;
-    logic [top_pkg::TL_SZW-1:0] cfg_rsp_size_q;
-    logic [top_pkg::TL_AIW-1:0] cfg_rsp_source_q;
-    logic [1:0] cfg_addr_row;
-    logic [1:0] cfg_addr_col;
-
     logic dpram_rw_en [3:0];
     logic dpram_rw_we [3:0];
     logic [ADDR_WIDTH-1:0] dpram_rw_addr [3:0];
@@ -124,9 +113,6 @@ module vertex_processor #(
     assign fifo_wvalid = vec_write_enqueue;
     assign fifo_wdata  = {write_triangle_id, vec_addr};
 
-    assign cfg_addr_row = tl_cfg_i.a_address[5:4];
-    assign cfg_addr_col = tl_cfg_i.a_address[3:2];
-
     assign out_valid_o = out_buf_valid_q;
     assign out_id_o    = out_id_q;
     assign vec_lane_sel = vec_sram_addr[1:0];
@@ -135,18 +121,7 @@ module vertex_processor #(
     assign vec_addr = {vec_triangle_id, vec_vertex_id};
     assign vec_rvalid = vec_read_pending_q;
     assign vec_rerror = 2'b00;
-    assign tl_cfg_o = '{
-        d_valid : cfg_rsp_valid_q,
-        d_opcode: cfg_rsp_opcode_q,
-        d_param : '0,
-        d_size  : cfg_rsp_size_q,
-        d_source: cfg_rsp_source_q,
-        d_sink  : '0,
-        d_data  : cfg_rsp_data_q,
-        d_user  : '0,
-        d_error : 1'b0,
-        a_ready : ~cfg_rsp_valid_q
-    };
+    assign matmul_out_valid = matmul_valid_pipe_q[1];
 
     for (genvar out_idx = 0; out_idx < 4; out_idx = out_idx + 1) begin : gen_out_assign
         assign out_vec_o[out_idx] = out_vec_q[out_idx];
@@ -215,20 +190,13 @@ module vertex_processor #(
         );
     end
 
-    matmul #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .FRAC_WIDTH(FRAC_WIDTH),
-        .OUT_WIDTH (OUT_WIDTH)
-    ) u_matmul (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .in_valid (matmul_in_valid),
-        .in_id    (pending_id_q),
-        .mat_A    (cfg_matrix_q),
-        .vec_B    (matmul_vec),
-        .out_valid(matmul_out_valid),
-        .out_id   (matmul_out_id),
-        .mat_C    (matmul_out)
+    matmul u_matmul (
+        .clk_i    (clk),
+        .rst_ni   (rst_n),
+        .tl_ctrl_i(tl_cfg_i),
+        .tl_ctrl_o(tl_cfg_o),
+        .data_i   (matmul_vec),
+        .data_o   (matmul_out)
     );
 
     always_comb begin
@@ -293,8 +261,10 @@ module vertex_processor #(
 
         if (matmul_out_valid) begin
             out_buf_valid_d = 1'b1;
-            out_id_d        = matmul_out_id;
-            out_vec_d       = matmul_out;
+            out_id_d        = pending_id_q;
+            for (int lane = 0; lane < 4; lane = lane + 1) begin
+                out_vec_d[lane] = out_t'(matmul_out[lane]);
+            end
         end
     end
 
@@ -318,20 +288,13 @@ module vertex_processor #(
             ram_r_addr_q    <= '0;
             out_buf_valid_q <= 1'b0;
             out_id_q        <= '0;
+            matmul_valid_pipe_q <= '0;
             addr_pending_q  <= '0;
             vec_read_pending_q <= 1'b0;
             vec_read_lane_q <= '0;
-            cfg_rsp_valid_q <= 1'b0;
-            cfg_rsp_data_q <= '0;
-            cfg_rsp_opcode_q <= tlul_pkg::AccessAck;
-            cfg_rsp_size_q <= '0;
-            cfg_rsp_source_q <= '0;
 
             for (int row = 0; row < 4; row = row + 1) begin
                 out_vec_q[row] <= '0;
-                for (int col = 0; col < 4; col = col + 1) begin
-                    cfg_matrix_q[row][col] <= '0;
-                end
             end
         end else begin
             state_q         <= state_d;
@@ -340,33 +303,12 @@ module vertex_processor #(
             ram_r_addr_q    <= ram_r_addr_d;
             out_buf_valid_q <= out_buf_valid_d;
             out_id_q        <= out_id_d;
+            matmul_valid_pipe_q <= {matmul_valid_pipe_q[0], matmul_in_valid};
             out_vec_q       <= out_vec_d;
             addr_pending_q  <= addr_pending_d;
             vec_read_pending_q <= vec_req && !vec_we;
             if (vec_req && !vec_we) begin
                 vec_read_lane_q <= vec_lane_sel;
-            end
-
-            if (cfg_rsp_valid_q && tl_cfg_i.d_ready) begin
-                cfg_rsp_valid_q <= 1'b0;
-            end
-
-            if (tl_cfg_i.a_valid && tl_cfg_o.a_ready) begin
-                cfg_rsp_valid_q <= 1'b1;
-                cfg_rsp_opcode_q <= (tl_cfg_i.a_opcode == tlul_pkg::Get) ?
-                                    tlul_pkg::AccessAckData : tlul_pkg::AccessAck;
-                cfg_rsp_size_q   <= tl_cfg_i.a_size;
-                cfg_rsp_source_q <= tl_cfg_i.a_source;
-                cfg_rsp_data_q   <= cfg_matrix_q[cfg_addr_row][cfg_addr_col];
-
-                if (tl_cfg_i.a_opcode != tlul_pkg::Get) begin
-                    for (int byte_idx = 0; byte_idx < DATA_WIDTH / 8; byte_idx = byte_idx + 1) begin
-                        if (tl_cfg_i.a_mask[byte_idx]) begin
-                            cfg_matrix_q[cfg_addr_row][cfg_addr_col][8*byte_idx +: 8] <=
-                                tl_cfg_i.a_data[8*byte_idx +: 8];
-                        end
-                    end
-                end
             end
         end
     end

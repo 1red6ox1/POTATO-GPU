@@ -9,6 +9,16 @@ module vertex_processor_tb;
 
   typedef logic signed [DATA_WIDTH-1:0] data_t;
   typedef logic signed [OUT_WIDTH-1:0] out_t;
+  localparam int MAT_DIM = 4;
+  localparam int NUM_CAMERAS = 5;
+  localparam int NUM_TRIS = 2;
+  localparam int NUM_VERTS = 3;
+
+  typedef data_t matrix_t[MAT_DIM][MAT_DIM];
+  typedef data_t vector_t[MAT_DIM];
+  typedef vector_t triangle_vectors_t[NUM_TRIS][NUM_VERTS];
+  typedef out_t out_vector_t[MAT_DIM];
+  typedef out_vector_t expected_vectors_t[NUM_TRIS][NUM_VERTS];
 
   logic clk;
   logic rst_n;
@@ -37,7 +47,6 @@ module vertex_processor_tb;
 
   vertex_processor #(
       .DATA_WIDTH(DATA_WIDTH),
-      .FRAC_WIDTH(16),
       .OUT_WIDTH (OUT_WIDTH),
       .FIFO_DEPTH(16)
   ) DUT (
@@ -225,7 +234,7 @@ module vertex_processor_tb;
   task automatic write_vector(
       input logic [TRI_ID_WIDTH-1:0] triangle_id,
       input logic [VTX_ID_WIDTH-1:0] endpoint,
-      input data_t vec[3:0]
+      input vector_t vec
   );
     vec_write_lane(triangle_id, endpoint, 2'd0, vec[0]);
     vec_write_lane(triangle_id, endpoint, 2'd1, vec[1]);
@@ -246,21 +255,9 @@ module vertex_processor_tb;
     @(posedge clk);
   endtask
 
-  task automatic configure_identity_matrix();
-    for (int r = 0; r < 4; r = r + 1) begin
-      for (int c = 0; c < 4; c = c + 1) begin
-        if (r == c) begin
-          cfg_write_word(r[1:0], c[1:0], 32'sh0001_0000);
-        end else begin
-          cfg_write_word(r[1:0], c[1:0], 32'sh0000_0000);
-        end
-      end
-    end
-  endtask
-
   task automatic wait_and_check_output(
       input logic [31:0] expected_id,
-      input out_t expected_vec[3:0],
+      input out_vector_t expected_vec,
       input string name
   );
     int unsigned timeout;
@@ -294,47 +291,210 @@ module vertex_processor_tb;
     @(posedge clk);
   endtask
 
+  task automatic clear_cfg_matrix();
+    for (int r = 0; r < MAT_DIM; r = r + 1) begin
+      for (int c = 0; c < MAT_DIM; c = c + 1) begin
+        cfg_write_word(r[1:0], c[1:0], 32'sh0000_0000);
+      end
+    end
+  endtask
+
+  task automatic write_cfg_matrix(input matrix_t matrix);
+    for (int r = 0; r < MAT_DIM; r = r + 1) begin
+      for (int c = 0; c < MAT_DIM; c = c + 1) begin
+        cfg_write_word(r[1:0], c[1:0], matrix[r][c]);
+      end
+    end
+  endtask
+
+  task automatic check_cfg_matrix(input matrix_t matrix, input string name);
+    for (int r = 0; r < MAT_DIM; r = r + 1) begin
+      for (int c = 0; c < MAT_DIM; c = c + 1) begin
+        check_cfg_word(r[1:0], c[1:0], matrix[r][c]);
+      end
+    end
+    $display("%s: matrix configured", name);
+  endtask
+
+  task automatic set_world_vectors(output triangle_vectors_t world);
+    world = '{
+        '{
+            '{32'sh00000000, 32'sh00000000, 32'sh00000000, 32'sh00010000},
+            '{32'sh00010000, 32'sh00000000, 32'sh00000000, 32'sh00010000},
+            '{32'sh00010000, 32'sh00010000, 32'sh00000000, 32'sh00010000}
+        },
+        '{
+            '{32'shfffe0000, 32'shffff0000, 32'sh00010000, 32'sh00010000},
+            '{32'sh00010000, 32'sh00020000, 32'sh00000000, 32'sh00010000},
+            '{32'shffff0000, 32'sh00000000, 32'sh00000000, 32'sh00010000}
+        }
+    };
+  endtask
+
+  task automatic set_camera_case(
+      input int unsigned camera_id,
+      output matrix_t matrix,
+      output expected_vectors_t expected
+  );
+    for (int r = 0; r < MAT_DIM; r = r + 1) begin
+      for (int c = 0; c < MAT_DIM; c = c + 1) begin
+        matrix[r][c] = '0;
+      end
+    end
+    for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
+      for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
+        for (int lane = 0; lane < MAT_DIM; lane = lane + 1) begin
+          expected[triangle_idx][vtx][lane] = '0;
+        end
+      end
+    end
+
+    case (camera_id)
+      0: begin
+        matrix = '{
+            '{32'sh00000000, 32'sh00000000, 32'shffff0697, 32'sh00000000},
+            '{32'sh00000000, 32'sh0001bb67, 32'sh00000000, 32'sh00000000},
+            '{32'shfffefeb8, 32'sh00000000, 32'sh00000000, 32'sh00048616},
+            '{32'shffff0000, 32'sh00000000, 32'sh00000000, 32'sh00050000}
+        };
+        expected = '{
+            '{
+                '{32'sh00000000, 32'sh00000000, 32'sh00048616, 32'sh00050000},
+                '{32'sh00000000, 32'sh00000000, 32'sh000384ce, 32'sh00040000},
+                '{32'sh00000000, 32'sh0001bb67, 32'sh000384ce, 32'sh00040000}
+            },
+            '{
+                '{32'shffff0697, 32'shfffe4499, 32'sh000688a6, 32'sh00070000},
+                '{32'sh00000000, 32'sh000376ce, 32'sh000384ce, 32'sh00040000},
+                '{32'sh00000000, 32'sh00000000, 32'sh0005875e, 32'sh00060000}
+            }
+        };
+      end
+      1: begin
+        matrix = '{
+            '{32'sh00006f8a, 32'sh00000000, 32'sh0000df15, 32'sh00000000},
+            '{32'sh00013dfc, 32'sh000108fd, 32'shffff6101, 32'sh00000000},
+            '{32'sh00008985, 32'shffff31b8, 32'shffffbb3d, 32'sh00034253},
+            '{32'sh000088d6, 32'shffff32bf, 32'shffffbb95, 32'sh0003bdda}
+        };
+        expected = '{
+            '{
+                '{32'sh00000000, 32'sh00000000, 32'sh00034253, 32'sh0003bdda},
+                '{32'sh00006f8a, 32'sh00013dfc, 32'sh0003cbd8, 32'sh000446b0},
+                '{32'sh00006f8a, 32'sh000246f9, 32'sh0002fd90, 32'sh0003796f}
+            },
+            '{
+                '{32'sh00000001, 32'shfffbdc0c, 32'sh0002b8ce, 32'sh00033504},
+                '{32'sh00006f8a, 32'sh00034ff6, 32'sh00022f48, 32'sh0002ac2e},
+                '{32'shffff9076, 32'shfffec204, 32'sh0002b8ce, 32'sh00033504}
+            }
+        };
+      end
+      2: begin
+        matrix = '{
+            '{32'sh00000000, 32'sh00000000, 32'shffff0691, 32'sh00000000},
+            '{32'shfffe4a99, 32'sh000048e5, 32'sh00000000, 32'sh00000008},
+            '{32'shffffd5b4, 32'shffff0238, 32'sh00000000, 32'sh00059ca7},
+            '{32'shffffd5ea, 32'shffff037c, 32'sh00000000, 32'sh0006152e}
+        };
+        expected = '{
+            '{
+                '{32'sh00000000, 32'sh00000008, 32'sh00059ca7, 32'sh0006152e},
+                '{32'sh00000000, 32'shfffe4aa1, 32'sh0005725b, 32'sh0005eb18},
+                '{32'sh00000000, 32'shfffe9386, 32'sh00047493, 32'sh0004ee94}
+            },
+            '{
+                '{32'shffff0691, 32'sh000321f1, 32'sh0006ef07, 32'sh000765de},
+                '{32'sh00000000, 32'shfffedc6b, 32'sh000376cb, 32'sh0003f210},
+                '{32'sh00000000, 32'sh0001b56f, 32'sh0005c6f3, 32'sh00063f44}
+            }
+        };
+      end
+      3: begin
+        matrix = '{
+            '{32'sh0000b05c, 32'sh00000000, 32'shffff4fa3, 32'sh00000000},
+            '{32'shffff4afc, 32'sh00016a07, 32'shffff4afb, 32'sh00000000},
+            '{32'shffff6b75, 32'shffff6b75, 32'shffff6b75, 32'sh0004b88b},
+            '{32'shffff6c33, 32'shffff6c33, 32'shffff6c33, 32'sh00053235}
+        };
+        expected = '{
+            '{
+                '{32'sh00000000, 32'sh00000000, 32'sh0004b88b, 32'sh00053235},
+                '{32'sh0000b05c, 32'shffff4afc, 32'sh00042400, 32'sh00049e68},
+                '{32'sh0000b05c, 32'sh0000b503, 32'sh00038f75, 32'sh00040a9b}
+            },
+            '{
+                '{32'shfffdeeeb, 32'shffff4afc, 32'sh0005e1a1, 32'sh000659cf},
+                '{32'sh0000b05c, 32'sh00021f0a, 32'sh0002faea, 32'sh000376ce},
+                '{32'shffff4fa4, 32'sh0000b504, 32'sh00054d16, 32'sh0005c602}
+            }
+        };
+      end
+      4: begin
+        matrix = '{
+            '{32'sh0000f969, 32'sh00000000, 32'sh00000000, 32'sh00000000},
+            '{32'sh00000000, 32'sh0001bb67, 32'sh00000000, 32'sh00000000},
+            '{32'sh00000000, 32'sh00000000, 32'shfffefeb8, 32'sh000080f6},
+            '{32'sh00000000, 32'sh00000000, 32'shffff0000, 32'sh00010000}
+        };
+        expected = '{
+            '{
+                '{32'sh00000000, 32'sh00000000, 32'sh000080f6, 32'sh00010000},
+                '{32'sh0000f969, 32'sh00000000, 32'sh000080f6, 32'sh00010000},
+                '{32'sh0000f969, 32'sh0001bb67, 32'sh000080f6, 32'sh00010000}
+            },
+            '{
+                '{32'shfffe0d2e, 32'shfffe4499, 32'shffff7fae, 32'sh00000000},
+                '{32'sh0000f969, 32'sh000376ce, 32'sh000080f6, 32'sh00010000},
+                '{32'shffff0697, 32'sh00000000, 32'sh000080f6, 32'sh00010000}
+            }
+        };
+      end
+      default: begin
+        $fatal(1, "Unknown camera_id %0d", camera_id);
+      end
+    endcase
+  endtask
+
+  task automatic run_camera_case(input int unsigned camera_id);
+    matrix_t matrix;
+    triangle_vectors_t world;
+    expected_vectors_t expected;
+    string name;
+
+    set_world_vectors(world);
+    set_camera_case(camera_id, matrix, expected);
+
+    out_ready = 1'b0;
+    clear_cfg_matrix();
+    write_cfg_matrix(matrix);
+    check_cfg_matrix(matrix, $sformatf("camera%0d", camera_id));
+
+    for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
+      for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
+        write_vector(TRI_ID_WIDTH'(triangle_idx), VTX_ID_WIDTH'(vtx),
+            world[triangle_idx][vtx]);
+      end
+    end
+
+    for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
+      for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
+        name = $sformatf("camera%0d_tri%0d_p%0d", camera_id, triangle_idx, vtx);
+        wait_and_check_output(32'(triangle_idx), expected[triangle_idx][vtx], name);
+      end
+    end
+  endtask
+
   initial begin
-    data_t vin0[3:0];
-    data_t vin1[3:0];
-    data_t vin2[3:0];
-    data_t vin3[3:0];
-    out_t exp0[3:0];
-    out_t exp1[3:0];
-    out_t exp2[3:0];
-    out_t exp3[3:0];
 
     errcnt = 0;
     clear_inputs();
 
     reset_dut();
 
-    configure_identity_matrix();
-    check_cfg_word(2'd0, 2'd0, 32'h0001_0000);
-    check_cfg_word(2'd0, 2'd1, 32'h0000_0000);
-    check_cfg_word(2'd1, 2'd1, 32'h0001_0000);
-    check_cfg_word(2'd3, 2'd3, 32'h0001_0000);
-
-    vin0 = '{32'sh0001_0000, 32'sh0002_0000, 32'sh0003_0000, 32'sh0001_0000};
-    vin1 = '{32'sh0004_0000, 32'sh0005_0000, 32'sh0006_0000, 32'sh0001_0000};
-    vin2 = '{32'shffff_0000, 32'sh0001_0000, 32'sh0000_8000, 32'sh0001_0000};
-    vin3 = '{32'sh0007_0000, 32'sh0008_0000, 32'sh0009_0000, 32'sh0001_0000};
-
-    exp0 = vin0;
-    exp1 = vin1;
-    exp2 = vin2;
-    exp3 = vin3;
-
-    out_ready = 1'b0;
-    write_vector(TRI_ID_WIDTH'(0), VTX_ID_WIDTH'(0), vin0);
-    write_vector(TRI_ID_WIDTH'(0), VTX_ID_WIDTH'(1), vin1);
-    write_vector(TRI_ID_WIDTH'(0), VTX_ID_WIDTH'(2), vin2);
-    write_vector(TRI_ID_WIDTH'(1), VTX_ID_WIDTH'(0), vin3);
-
-    wait_and_check_output(32'h0000_0000, exp0, "vec0_triangle0");
-    wait_and_check_output(32'h0000_0000, exp1, "vec1_triangle0");
-    wait_and_check_output(32'h0000_0000, exp2, "vec2_triangle0");
-    wait_and_check_output(32'h0000_0001, exp3, "vec3_triangle1");
+    for (int camera_id = 0; camera_id < NUM_CAMERAS; camera_id = camera_id + 1) begin
+      run_camera_case(camera_id);
+    end
 
     if (errcnt > 0) begin
       $display("### TESTS FAILED WITH %0d ERRORS ###", errcnt);
