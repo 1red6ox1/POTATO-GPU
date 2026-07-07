@@ -4,3 +4,4 @@ docs/_build/
 vivado*.jou
 vivado*.log
 .Xil/
+obj_dir/
