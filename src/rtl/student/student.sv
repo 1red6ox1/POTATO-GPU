@@ -30,7 +30,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 4;
+  localparam int N = 5;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -152,6 +152,19 @@ module student (
     .host_o(xbar_rsps),
     .dev_o (ddr_o),
     .dev_i (ddr_i)
+  );
+
+  /* Fixed-function rasterization pipeline */
+
+  matmul matmul_i (
+    .clk_i,
+    .rst_ni,
+
+    .tl_ctrl_i(tl_devices_h2d[4]),
+    .tl_ctrl_o(tl_devices_d2h[4]),
+
+    .data_i   ('{default: '0}),
+    .data_o   ()
   );
 
 endmodule

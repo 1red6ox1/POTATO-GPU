@@ -33,7 +33,7 @@ sw_dirs = [
 flow['libsys'] = Libsys(dependency_map={'reggen': 'reggen'})
 for sw_dir in sw_dirs:
     flow[f'sw_{sw_dir}'] = Program(sw_dir, dependency_map={
-        'libsys':'libsys', 'ref':'sw_test_rvlab', 'reggen': 'reggen'})
+        'libsys':'libsys', 'ref':'sw_project', 'reggen': 'reggen'})
 
 # Hardware
 # --------
@@ -45,7 +45,7 @@ flow['ddr3_model'] = Ddr3Model()
 flow['srcs'] = Sources(dependency_map={
     'xbar': 'xbar',
     'reggen': 'reggen',
-    'swinit': 'sw_test_rvlab',
+    'swinit': 'sw_project',
     'ddr3_model': 'ddr3_model',
 })
 

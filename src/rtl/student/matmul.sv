@@ -1,101 +1,69 @@
-module matmul #(
-    parameter int DATA_WIDTH = 32,
-    parameter int FRAC_WIDTH = 16,
-    parameter int OUT_WIDTH  = DATA_WIDTH
-) (
-    input  logic                              clk,
-    input  logic                              rst_n,
-    input  logic                              in_valid,
-    input  logic [DATA_WIDTH-1:0]             in_id,
-    input  logic signed [DATA_WIDTH-1:0]      mat_A [3:0][3:0],
-    input  logic signed [DATA_WIDTH-1:0]      vec_B [3:0],
-    output logic                              out_valid,
-    output logic [DATA_WIDTH-1:0]             out_id,
-    output logic signed [OUT_WIDTH-1:0]       mat_C [3:0]
+// Copyright POTATO GPU Contributors 2026.
+
+module matmul
+	import tlul_pkg::*;
+(
+	input  logic clk_i,
+	input  logic rst_ni,
+
+	input  tl_h2d_t tl_ctrl_i,
+	output tl_d2h_t tl_ctrl_o,
+
+	input  logic [31:0] data_i [3:0],
+	output logic [31:0] data_o [3:0]
 );
 
-    localparam int PROD_WIDTH = DATA_WIDTH * 2;
-    localparam int ACC_WIDTH  = PROD_WIDTH + 2;
+	import matmul_ctrl_reg_pkg::*;
 
-    logic signed [DATA_WIDTH-1:0] a_reg [3:0][3:0];
-    logic signed [DATA_WIDTH-1:0] b_reg [3:0];
-    logic signed [PROD_WIDTH-1:0] prod [3:0][3:0];
-    logic signed [PROD_WIDTH:0]   sum_lvl1 [3:0][1:0];
-    logic signed [ACC_WIDTH-1:0]  sum_lvl2 [3:0];
-    logic [3:0] valid_pipe;
-    logic [DATA_WIDTH-1:0] id_pipe [3:0];
+	matmul_ctrl_reg2hw_t reg2hw;
 
-    generate
-        genvar row;
-        genvar col;
+	matmul_ctrl_reg_top reg_top_i (
+		.clk_i,
+		.rst_ni,
+		.tl_i     (tl_ctrl_i),
+		.tl_o     (tl_ctrl_o),
+		.reg2hw   (reg2hw),
+		.devmode_i('1)
+	);
 
-        for (row = 0; row < 4; row = row + 1) begin : gen_rows
-            for (col = 0; col < 4; col = col + 1) begin : gen_cols
-                always_ff @(posedge clk) begin
-                    if (!rst_n) begin
-                        a_reg[row][col] <= '0;
-                        prod[row][col]  <= '0;
-                    end else begin
-                        if (in_valid) begin
-                            a_reg[row][col] <= mat_A[row][col];
-                        end
+	logic signed [31:0] matrix      [3:0][3:0];
+	logic signed [63:0] mult_result [3:0][3:0];
 
-                        prod[row][col] <= a_reg[row][col] * b_reg[col];
-                    end
-                end
-            end
-        end
+	// Row-major order
+	assign matrix[0][0] = $signed(reg2hw.mat_0_0.q);
+	assign matrix[0][1] = $signed(reg2hw.mat_0_1.q);
+	assign matrix[0][2] = $signed(reg2hw.mat_0_2.q);
+	assign matrix[0][3] = $signed(reg2hw.mat_0_3.q);
+	assign matrix[1][0] = $signed(reg2hw.mat_1_0.q);
+	assign matrix[1][1] = $signed(reg2hw.mat_1_1.q);
+	assign matrix[1][2] = $signed(reg2hw.mat_1_2.q);
+	assign matrix[1][3] = $signed(reg2hw.mat_1_3.q);
+	assign matrix[2][0] = $signed(reg2hw.mat_2_0.q);
+	assign matrix[2][1] = $signed(reg2hw.mat_2_1.q);
+	assign matrix[2][2] = $signed(reg2hw.mat_2_2.q);
+	assign matrix[2][3] = $signed(reg2hw.mat_2_3.q);
+	assign matrix[3][0] = $signed(reg2hw.mat_3_0.q);
+	assign matrix[3][1] = $signed(reg2hw.mat_3_1.q);
+	assign matrix[3][2] = $signed(reg2hw.mat_3_2.q);
+	assign matrix[3][3] = $signed(reg2hw.mat_3_3.q);
 
-        for (col = 0; col < 4; col = col + 1) begin : gen_vector
-            always_ff @(posedge clk) begin
-                if (!rst_n) begin
-                    b_reg[col] <= '0;
-                end else if (in_valid) begin
-                    b_reg[col] <= vec_B[col];
-                end
-            end
-        end
-
-        for (row = 0; row < 4; row = row + 1) begin : gen_output
-            always_ff @(posedge clk) begin
-                if (!rst_n) begin
-                    sum_lvl1[row][0] <= '0;
-                    sum_lvl1[row][1] <= '0;
-                    sum_lvl2[row]    <= '0;
-                    mat_C[row]       <= '0;
-                end else begin
-                    sum_lvl1[row][0] <= prod[row][0] + prod[row][1];
-                    sum_lvl1[row][1] <= prod[row][2] + prod[row][3];
-                    sum_lvl2[row]    <= sum_lvl1[row][0] + sum_lvl1[row][1];
-                    mat_C[row]       <= ((sum_lvl2[row] >>> FRAC_WIDTH) >
-                                         $signed({{(ACC_WIDTH-OUT_WIDTH){1'b0}},
-                                         {1'b0, {(OUT_WIDTH-1){1'b1}}}})) ?
-                                        {1'b0, {(OUT_WIDTH-1){1'b1}}} :
-                                        (((sum_lvl2[row] >>> FRAC_WIDTH) <
-                                         $signed({{(ACC_WIDTH-OUT_WIDTH){1'b1}},
-                                         {1'b1, {(OUT_WIDTH-1){1'b0}}}})) ?
-                                        {1'b1, {(OUT_WIDTH-1){1'b0}}} :
-                                        sum_lvl2[row][FRAC_WIDTH+:OUT_WIDTH]);
-                end
-            end
-        end
-    endgenerate
-
-    always_ff @(posedge clk) begin
-        if (!rst_n) begin
-            valid_pipe <= '0;
-            out_valid  <= 1'b0;
-            id_pipe[0] <= '0;
-            id_pipe[1] <= '0;
-            id_pipe[2] <= '0;
-            id_pipe[3] <= '0;
-            out_id <= '0;
-        end else begin
-            valid_pipe <= {valid_pipe[2:0], in_valid};
-            out_valid  <= valid_pipe[3];
-            id_pipe <= {id_pipe[2:0], in_id};
-            out_id <= id_pipe[3];
-        end
-    end
+	always_ff @(posedge clk_i) begin
+		if (~rst_ni) begin
+			for (int i = 0; i < 4; i++) begin
+				for (int j = 0; j < 4; j++) begin
+					mult_result[i][j] <= '0;
+				end
+				data_o[i] <= '0;
+			end
+		end else begin
+			for (int i = 0; i < 4; i++) begin
+				for (int j = 0; j < 4; j++) begin
+					mult_result[i][j] <= matrix[i][j] * data_i[j];
+				end
+				data_o[i] <= (mult_result[i][0][47:16] + mult_result[i][1][47:16])
+				           + (mult_result[i][2][47:16] + mult_result[i][3][47:16]);
+			end
+		end
+	end
 
 endmodule
