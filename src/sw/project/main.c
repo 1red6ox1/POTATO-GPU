@@ -3,6 +3,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <rvlab.h>
 
 #include "graphics_math.h"
@@ -40,7 +41,7 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
 
 typedef vec4_t triangle_t[3];
 
-void viewport_transform(vec4_t clip, uint16_t* x, uint16_t* y) {
+void viewport_transform(vec4_t clip, int16_t* x, int16_t* y) {
     fixed_t ndc_x = fixed_div(clip[0], clip[3]);
     fixed_t ndc_y = fixed_div(clip[1], clip[3]);
     fixed_t screen_x = ((ndc_x + (1<<16)) >> 1) * 1920;
@@ -58,10 +59,6 @@ void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8
     *((uint8_t*)addr_r) = r;
     *((uint8_t*)addr_g) = g;
     *((uint8_t*)addr_b) = b;
-
-    uint32_t block_r = addr_r & 0xFFFFFFE0;
-    uint32_t block_g = addr_g & 0xFFFFFFE0;
-    uint32_t block_b = addr_b & 0xFFFFFFE0;
 }
 
 void render_line(uint8_t fbid, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
@@ -91,8 +88,8 @@ void render_line(uint8_t fbid, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y
 
 void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
     vec4_t clip_p0, clip_p1, clip_p2;
-    uint16_t x0, x1, x2;
-    uint16_t y0, y1, y2;
+    int16_t x0, x1, x2;
+    int16_t y0, y1, y2;
     mat_vec_mul(clip_p0, VP, tri[0]);
     mat_vec_mul(clip_p1, VP, tri[1]);
     mat_vec_mul(clip_p2, VP, tri[2]);
@@ -106,26 +103,107 @@ void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
     for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
 }
 
-int main(void) {
-    ddr_init();
-    printf("HDMI HPD Status: %d\n", REG32(HDMI_CTRL_HPD(0)));
+#define F(x) ((x) << 16)
+#define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
+#define V4(x, y, z, w) {F(x), F(y), F(z), F(w)}
+// Default camera attributes: aspect 16/9, near 0.25, far 100
+#define FOVY 60
+#define INV_ASPECT 0x00009000
+#define NEAR (1<<14)
+#define FAR (100<<16)
 
-    #define F(x) ((x) << 16)
-    #define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
-    #define V4(x, y, z, w) {F(x), F(y), F(z), F(w)}
+void testcase_single_tri(matrix_t VP, triangle_t tri) {
+    vec4_t clip[3];
+    int16_t x[3];
+    int16_t y[3];
 
-    fixed_t inverse_aspect = (fixed_t)0x00009000; // 9/16
+    mat_vec_mul(clip[0], VP, tri[0]);
+    mat_vec_mul(clip[1], VP, tri[1]);
+    mat_vec_mul(clip[2], VP, tri[2]);
+    viewport_transform(clip[0], &x[0], &y[0]);
+    viewport_transform(clip[1], &x[1], &y[1]);
+    viewport_transform(clip[2], &x[2], &y[2]);
 
-    vec3_t camera_pos = {F(5), F(2), F(-5)};
+    printf("  WORLD SPACE:\n");
+    for (int k = 0; k < 3; k++) {
+        printf("    P%d: ", k);
+        vec4_print(tri[k]);
+        printf("\n");
+    }
+
+    printf("  CLIP SPACE:\n");
+    for (int k = 0; k < 3; k++) {
+        printf("    P%d: ", k);
+        vec4_print(clip[k]);
+        printf("\n");
+    }
+
+    printf("  SCREEN SPACE:\n");
+    for (int k = 0; k < 3; k++) {
+        bool discard = x[k] > 1919 || x[k] < 0 || y[k] > 1079 || y[k] < 0;
+        printf("    P%d: %4d/%4d %s", k, x[k], y[k], discard ? "(discarded)" : "");
+        printf("\n");
+    }
+}
+
+void testcases() {
+    /* Generate some test cases for different stages of the design */
+
+    #define NCAMPOS 5
+    #define NTRIS 2
 
     matrix_t view_mat, proj_mat, VP;
-    persp_proj_mat(proj_mat, 60, inverse_aspect, 100 << 16, 1 << 14); // near = 0.25 far = 100
+    vec3_t camera_positions[NCAMPOS] = {
+        {F( 5), F( 0), F( 0)},
+        {F(-2), F( 3), F( 1)},
+        {F( 1), F( 6), F( 0)},
+        {F( 3), F( 3), F( 3)},
+        {F( 0), F( 0), F( 1)}
+    };
+
+    triangle_t triangles[NTRIS] = {
+        {V4(0, 0, 0, 1), V4(1, 0, 0, 1), V4(1, 1, 0, 1)},
+        {V4(-2, -1, 1, 1), V4(1, 2, 0, 1), V4(-1, 0, 0, 1)}
+    };
+
+    persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
+
+    for (int i = 0; i < NCAMPOS; i++) {
+        vec3_t *camera_pos = &camera_positions[i];
+
+        // Generate matrices
+        lookat_mat(view_mat, *camera_pos, V3(0, 0, 0), V3(0, 1, 0));
+        mat_mat_mul(VP, proj_mat, view_mat);
+
+        printf("\n===\n\n");
+        printf("VIEWxPROJ for camera %d @ ", i);
+        vec3_print(*camera_pos);
+        printf(":\n");
+        mat_print(VP);
+        printf("\n");
+
+        for (int j = 0; j < NTRIS; j++) {
+            printf("TRI %d:\n", j);
+            testcase_single_tri(VP, triangles[j]);
+            printf("\n");
+        }
+    }
+}
+
+int main(void) {
+    ddr_init();
+
+    vec3_t camera_pos = {F(5), F(2), F(-5)};
+    matrix_t view_mat, proj_mat, VP;
+    persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
 
     uint8_t fbid = 0;
     
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB); // Enable HDMI output
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
     REG32(HDMI_CTRL_FBID(0)) = 0;
+
+    testcases();
 
     while (1) {
         cmd_clear_fb(fbid, 0, 0, 0);

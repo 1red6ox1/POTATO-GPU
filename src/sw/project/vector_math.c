@@ -42,19 +42,19 @@ void vec3_normalize(vec3_t dest, vec3_t src) {
 }
 
 void vec3_print(vec3_t vec) {
-	printf("[ ");
+	printf("( ");
 	for (int i = 0; i < 3; i++) {
-		fixed_print(vec[i]);
+		fixed_print_full(vec[i]);
 		printf(" ");
 	}
-	printf("]\n");
+	printf(")");
 }
 
 void vec4_print(vec4_t vec) {
 	printf("[ ");
 	for (int i = 0; i < 4; i++) {
-		fixed_print(vec[i]);
+		fixed_print_full(vec[i]);
 		printf(" ");
 	}
-	printf("]\n");
+	printf("]");
 }

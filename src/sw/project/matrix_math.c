@@ -40,5 +40,6 @@ void mat_mat_mul(matrix_t dest, matrix_t mat1, matrix_t mat2) {
 void mat_print(matrix_t mat) {
 	for (int row = 0; row < 4; row++) {
 		vec4_print(mat[row]);
+		printf("\n");
 	}
 }

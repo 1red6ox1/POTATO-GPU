@@ -43,3 +43,11 @@ void fixed_print(fixed_t f) {
 	int32_t integer = true_x10k / 10000;
 	printf("%6d.%04d", integer, decimals);
 }
+
+void fixed_print_full(fixed_t f) {
+    int64_t f_x10k = (int64_t)f * 10000; // (true value * 65536) * 10.000
+    int64_t true_x10k = f_x10k >> 16;    // (true value) * 10.000
+    int32_t decimals = true_x10k < 0 ? ((-true_x10k) % 10000) : (true_x10k % 10000);
+    int32_t integer = true_x10k / 10000;
+    printf("%6d.%04d[0x%08x]", integer, decimals, f);
+}
