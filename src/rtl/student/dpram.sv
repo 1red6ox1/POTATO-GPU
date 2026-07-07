@@ -18,7 +18,7 @@ module dpram #(
     output logic signed [DATA_WIDTH-1:0]  r_data_out
 );
 
-    (* ram_style = "block" *) logic signed [DATA_WIDTH-1:0] ram [DEPTH-1:0];
+    (* ram_style = "block" *) logic [DATA_WIDTH-1:0] ram [DEPTH-1:0] = '{default: '0};
 
     always_ff @(posedge clk) begin
         if (rw_en) begin
