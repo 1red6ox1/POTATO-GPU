@@ -10,7 +10,15 @@ module matmul
 	output tl_d2h_t tl_ctrl_o,
 
 	input  logic signed [31:0] data_i [3:0],
-	output logic signed [31:0] data_o [3:0]
+	output logic signed [31:0] data_o [3:0],
+
+	input  logic        valid_i,
+	input  logic [15:0] id_i,
+	output logic        ready_o,
+
+	output logic        valid_o,
+	output logic [15:0] id_o,
+	input  logic        ready_i
 );
 
 	import matmul_ctrl_reg_pkg::*;
