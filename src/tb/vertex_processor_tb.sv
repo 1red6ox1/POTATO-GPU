@@ -489,7 +489,8 @@ module vertex_processor_tb;
     for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
       for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
         name = $sformatf("camera%0d_tri%0d_p%0d", camera_id, triangle_idx, vtx);
-        wait_and_check_output(32'(triangle_idx), expected[triangle_idx][vtx], name, vtx == 0);
+        wait_and_check_output(
+            TRI_ID_WIDTH'(triangle_idx), expected[triangle_idx][vtx], name, vtx == 0);
       end
     end
   endtask
