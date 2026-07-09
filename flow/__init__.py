@@ -61,7 +61,7 @@ module_tbs = [
     "matmul_tb",
     "hdmi_tb",
     "dpram_tb",
-    "vertrex_processor_tb",
+    "vertex_processor_tb",
 ]
 
 for name in module_tbs:
