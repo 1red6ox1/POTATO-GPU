@@ -28,6 +28,7 @@ sw_dirs = [
     "rlight",
     "dma",
     "project",
+    "vertex_test",
 ]
 
 flow['libsys'] = Libsys(dependency_map={'reggen': 'reggen'})
