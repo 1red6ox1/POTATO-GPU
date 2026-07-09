@@ -3,7 +3,7 @@ module dpram #(
     parameter int DEPTH      = 512,
     parameter int ADDR_WIDTH = $clog2(DEPTH)
 ) (
-    input  logic                          clk,
+    input  logic                          clk_i,
 
     // Port A: read/write port
     input  logic [ADDR_WIDTH-1:0]         rw_addr,
@@ -20,7 +20,7 @@ module dpram #(
 
     (* ram_style = "block" *) logic [DATA_WIDTH-1:0] ram [DEPTH-1:0] = '{default: '0};
 
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clk_i) begin
         if (rw_en) begin
             if (rw_we) begin
                 ram[rw_addr] <= rw_data_in;

@@ -30,7 +30,7 @@ module vertex_processor_tb;
 
   logic out_valid;
   logic out_ready;
-  logic [31:0] out_id;
+  logic [TRI_ID_WIDTH-1:0] out_id;
   out_t out_vec[3:0];
 
   int unsigned errcnt;
@@ -255,7 +255,7 @@ module vertex_processor_tb;
   endtask
 
   task automatic wait_and_check_output(
-      input logic [31:0] expected_id,
+      input logic [TRI_ID_WIDTH-1:0] expected_id,
       input out_vector_t expected_vec,
       input string name,
       input logic expected_valid

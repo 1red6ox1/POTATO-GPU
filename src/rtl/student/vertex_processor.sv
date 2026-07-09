@@ -14,105 +14,71 @@ module vertex_processor #(
     //
     // Each lane has its own DPRAM, so the DPRAM address is the compact
     // {triangle_id, vertex_id} part decoded from the vector TL-UL address.
-    parameter int TRI_ID_WIDTH = 10,
-    parameter int VTX_ID_WIDTH = 2,
-    localparam int ADDR_WIDTH = TRI_ID_WIDTH + VTX_ID_WIDTH,
-    localparam int RAM_DEPTH  = 1 << ADDR_WIDTH
+    parameter int                         TRI_ID_WIDTH = 10,
+    parameter int                         VTX_ID_WIDTH = 2
 ) (
-    input  logic                         clk,
-    input  logic                         rst_n,
-
-    input  tlul_pkg::tl_h2d_t tl_cfg_i,
-    output tlul_pkg::tl_d2h_t tl_cfg_o,
-
-    input  tlul_pkg::tl_h2d_t tl_vec_i,
-    output tlul_pkg::tl_d2h_t tl_vec_o,
+    input  logic                          clk,
+    input  logic                          rst_n,
+         
+    input  tlul_pkg::tl_h2d_t             tl_cfg_i,
+    output tlul_pkg::tl_d2h_t             tl_cfg_o,
+         
+    input  tlul_pkg::tl_h2d_t             tl_vec_i,
+    output tlul_pkg::tl_d2h_t             tl_vec_o,
 
 
     // Output vector stream. Stored vectors are launched into matmul and held
     // until accepted on this downstream interface.
-    output logic                         out_valid_o,
-    input  logic                         out_ready_i,
-    output logic [31:0]                  out_id_o,
-    output logic signed [OUT_WIDTH-1:0]  out_vec_o [3:0]
+    output logic                          out_valid_o,
+    input  logic                          out_ready_i,
+    output logic [TRI_ID_WIDTH-1:0]       out_id_o,
+    output logic signed [OUT_WIDTH-1:0]   out_vec_o [3:0]
 );
 
     typedef logic signed [DATA_WIDTH-1:0] data_t;
-    typedef logic signed [OUT_WIDTH-1:0]  out_t;
 
-    localparam int VEC_SRAM_AW = ADDR_WIDTH + 2;
-    localparam int MATMUL_ID_WIDTH = 16;
+    localparam int                        ADDR_WIDTH  = TRI_ID_WIDTH + VTX_ID_WIDTH;
+    localparam int                        RAM_DEPTH   = 1 << ADDR_WIDTH;
+    localparam int                        VEC_SRAM_AW = ADDR_WIDTH + 2;
 
-    data_t matmul_vec   [3:0];
-    out_t  matmul_out   [3:0];
+    // Persistent scene bounds and current render position.
+    logic [TRI_ID_WIDTH-1:0]              launch_triangle_q;
+    logic [VTX_ID_WIDTH-1:0]              launch_vertex_q;
+    logic [TRI_ID_WIDTH-1:0]              last_stored_triangle_q;
+    logic                                 stored_triangle_valid_q;
 
-    logic [ADDR_WIDTH-1:0] ram_r_addr;
-    logic [TRI_ID_WIDTH-1:0] launch_triangle_q;
-    logic [VTX_ID_WIDTH-1:0] launch_vertex_q;
-    // Despite the name, this stores the last completed triangle ID.
-    logic [TRI_ID_WIDTH-1:0] stored_triangle_count_q;
-    logic stored_triangle_valid_q;
-    logic read_valid_q;
-    logic read_first_vertex_q;
-    logic [MATMUL_ID_WIDTH-1:0] read_id_q;
+    // Pipeline state that aligns synchronous DPRAM data with matmul metadata.
+    data_t                                matmul_vec [3:0];
+    logic                                 read_valid_q;
+    logic                                 read_first_vertex_q;
+    logic [TRI_ID_WIDTH-1:0]              read_id_q;
 
-    logic vec_gnt;
-    logic vec_accept;
-    logic [TRI_ID_WIDTH-1:0] vec_triangle_id;
-    logic triangle_write_complete;
-    logic launch_last_vertex;
-    logic launch_last_triangle;
-    logic read_fire;
-    logic cfg_write_accept;
-    logic ram_r_en;
-    logic matmul_in_valid;
-    logic matmul_out_valid;
-    logic matmul_ready;
-    logic [MATMUL_ID_WIDTH-1:0] matmul_id_out;
+    // Render, configuration, and matmul handshake signals.
+    logic                                 read_fire;
+    logic                                 cfg_write_accept;
+    logic                                 matmul_ready;
 
-    logic vec_req;
-    logic vec_we;
-    logic [VEC_SRAM_AW-1:0] vec_sram_addr;
-    logic [DATA_WIDTH-1:0] vec_wdata;
-    logic [DATA_WIDTH-1:0] vec_wmask;
-    logic [DATA_WIDTH-1:0] vec_rdata;
-    logic vec_rvalid;
-    logic [1:0] vec_rerror;
-    logic vec_read_pending_q;
-    logic [1:0] vec_read_lane_q;
+    // TL-UL vector-memory request decoded by the SRAM adapter.
+    logic                                 vec_req;
+    logic                                 vec_we;
+    logic [VEC_SRAM_AW-1:0]               vec_sram_addr;
+    logic [DATA_WIDTH-1:0]                vec_wdata;
+    logic [DATA_WIDTH-1:0]                vec_wmask;
+    logic [TRI_ID_WIDTH-1:0]              vec_triangle_id;
+    logic                                 triangle_write_complete;
 
-    data_t dpram_rw_data_out [3:0];
-    tlul_pkg::tl_d2h_t tl_cfg_matmul_o;
+    // State and lane data used to return synchronous vector-memory reads.
+    logic [DATA_WIDTH-1:0]                vec_rdata;
+    logic                                 vec_read_pending_q;
+    logic [1:0]                           vec_read_lane_q;
+    data_t                                dpram_rw_data_out [3:0];
 
     // vec_sram_addr is already word-addressed by tlul_adapter_sram, so
     // vec_sram_addr[1:0] corresponds to TL-UL byte address bits [3:2].
-    assign triangle_write_complete = vec_req && vec_we &&
-                                      (vec_sram_addr[1:0] == 2'd3) &&
-                                      (vec_sram_addr[3:2] == 2'd2);
+    assign triangle_write_complete = vec_req && vec_we && (vec_sram_addr[1:0] == 2'd3) && (vec_sram_addr[3:2] == 2'd2);
     assign vec_triangle_id = vec_sram_addr[VEC_SRAM_AW-1:4];
-    assign launch_last_vertex = (launch_vertex_q == 2'd2);
-    assign launch_last_triangle = (launch_triangle_q == stored_triangle_count_q);
     assign read_fire = matmul_ready && stored_triangle_valid_q;
-    assign vec_gnt = 1'b1;
-    assign vec_accept = vec_req && vec_gnt;
-    assign cfg_write_accept = tl_cfg_i.a_valid && tl_cfg_matmul_o.a_ready &&
-                              (tl_cfg_i.a_opcode inside {
-                                  tlul_pkg::PutFullData,
-                                  tlul_pkg::PutPartialData
-                              });
-
-    assign tl_cfg_o = tl_cfg_matmul_o;
-    assign out_valid_o = matmul_out_valid;
-    assign out_id_o    = {{(32-MATMUL_ID_WIDTH){1'b0}}, matmul_id_out};
-    assign vec_rvalid = vec_read_pending_q;
-    assign vec_rerror = 2'b00;
-    assign ram_r_addr = {launch_triangle_q, launch_vertex_q};
-    assign ram_r_en = read_fire;
-    assign matmul_in_valid = read_valid_q && matmul_ready;
-
-    for (genvar out_idx = 0; out_idx < 4; out_idx = out_idx + 1) begin : gen_out_assign
-        assign out_vec_o[out_idx] = matmul_out[out_idx];
-    end
+    assign cfg_write_accept = tl_cfg_i.a_valid && tl_cfg_o.a_ready && (tl_cfg_i.a_opcode inside {tlul_pkg::PutFullData,tlul_pkg::PutPartialData});
 
     tlul_adapter_sram #(
         .SramDw(DATA_WIDTH),
@@ -127,14 +93,14 @@ module vertex_processor #(
         .tl_i(tl_vec_i),
         .tl_o(tl_vec_o),
         .req_o(vec_req),
-        .gnt_i(vec_gnt),
+        .gnt_i(1'b1),
         .we_o(vec_we),
         .addr_o(vec_sram_addr),
         .wdata_o(vec_wdata),
         .wmask_o(vec_wmask),
         .rdata_i(vec_rdata),
-        .rvalid_i(vec_rvalid),
-        .rerror_i(vec_rerror)
+        .rvalid_i(vec_read_pending_q),
+        .rerror_i(2'b00)
     );
 
     for (genvar lane = 0; lane < 4; lane = lane + 1) begin : gen_dpram_lanes
@@ -143,51 +109,42 @@ module vertex_processor #(
             .DEPTH     (RAM_DEPTH),
             .ADDR_WIDTH(ADDR_WIDTH)
         ) u_dpram_lane (
-            .clk        (clk),
+            .clk_i      (clk),
             .rw_addr    ({vec_sram_addr[VEC_SRAM_AW-1:4], vec_sram_addr[3:2]}),
-            .rw_en      (vec_accept && (vec_sram_addr[1:0] == lane[1:0])),
-            .rw_we      (vec_accept && vec_we && (vec_sram_addr[1:0] == lane[1:0])),
+            .rw_en      (vec_req && (vec_sram_addr[1:0] == lane[1:0])),
+            .rw_we      (vec_req && vec_we && (vec_sram_addr[1:0] == lane[1:0])),
             .rw_data_in (data_t'(vec_wdata & vec_wmask)),
             .rw_data_out(dpram_rw_data_out[lane]),
-            .r_addr     (ram_r_addr),
-            .r_en       (ram_r_en),
+            .r_addr     ({launch_triangle_q, launch_vertex_q}),
+            .r_en       (read_fire),
             .r_data_out (matmul_vec[lane])
         );
     end
 
     matmul #(
-        .ID_WIDTH(MATMUL_ID_WIDTH)
+        .ID_WIDTH(TRI_ID_WIDTH)
     ) u_matmul (
         .clk_i    (clk),
         .rst_ni   (rst_n),
         .tl_ctrl_i(tl_cfg_i),
-        .tl_ctrl_o(tl_cfg_matmul_o),
+        .tl_ctrl_o(tl_cfg_o),
         .data_i   (matmul_vec),
-        .data_o   (matmul_out),
-        .valid_i  (matmul_in_valid && read_first_vertex_q),
+        .data_o   (out_vec_o),
+        .valid_i  (read_valid_q && read_first_vertex_q),
         .id_i     (read_id_q),
         .ready_o  (matmul_ready),
-        .valid_o  (matmul_out_valid),
-        .id_o     (matmul_id_out),
+        .valid_o  (out_valid_o),
+        .id_o     (out_id_o),
         .ready_i  (out_ready_i)
     );
 
-    always_comb begin
-        vec_rdata = '0;
-        unique case (vec_read_lane_q)
-            2'd0: vec_rdata = dpram_rw_data_out[0];
-            2'd1: vec_rdata = dpram_rw_data_out[1];
-            2'd2: vec_rdata = dpram_rw_data_out[2];
-            2'd3: vec_rdata = dpram_rw_data_out[3];
-            default: vec_rdata = '0;
-        endcase
-    end
+    assign vec_rdata = dpram_rw_data_out[vec_read_lane_q];
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             launch_triangle_q <= '0;
             launch_vertex_q <= '0;
-            stored_triangle_count_q <= '0;
+            last_stored_triangle_q <= '0;
             stored_triangle_valid_q <= 1'b0;
             read_valid_q <= 1'b0;
             read_first_vertex_q <= 1'b0;
@@ -195,8 +152,8 @@ module vertex_processor #(
             vec_read_pending_q <= 1'b0;
             vec_read_lane_q <= '0;
         end else begin
-            vec_read_pending_q <= vec_accept && !vec_we;
-            if (vec_accept && !vec_we) begin
+            vec_read_pending_q <= vec_req && !vec_we;
+            if (vec_req && !vec_we) begin
                 vec_read_lane_q <= vec_sram_addr[1:0];
             end
 
@@ -211,14 +168,14 @@ module vertex_processor #(
                     read_valid_q <= read_fire;
                     if (read_fire) begin
                         read_first_vertex_q <= (launch_vertex_q == '0);
-                        read_id_q <= MATMUL_ID_WIDTH'(launch_triangle_q);
+                        read_id_q <= launch_triangle_q;
                     end
                 end
 
                 if (read_fire) begin
-                    if (launch_last_vertex) begin
+                    if (launch_vertex_q == 2'd2) begin
                         launch_vertex_q <= '0;
-                        if (launch_last_triangle) begin
+                        if (launch_triangle_q == last_stored_triangle_q) begin
                             launch_triangle_q <= '0;
                         end else begin
                             launch_triangle_q <= launch_triangle_q + 1'b1;
@@ -229,10 +186,10 @@ module vertex_processor #(
                 end
             end
 
-            if (vec_accept && triangle_write_complete) begin
-                stored_triangle_count_q <= vec_triangle_id;
+            if (triangle_write_complete) begin
+                last_stored_triangle_q <= vec_triangle_id;
                 stored_triangle_valid_q <= 1'b1;
-                if (!stored_triangle_valid_q || (launch_triangle_q > vec_triangle_id)) begin
+                if (launch_triangle_q > vec_triangle_id) begin
                     launch_triangle_q <= '0;
                     launch_vertex_q <= '0;
                     read_valid_q <= 1'b0;
