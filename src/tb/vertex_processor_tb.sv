@@ -72,7 +72,7 @@ module vertex_processor_tb;
       input logic [31:0] wdata
   );
     int unsigned timeout;
-    @(posedge clk);
+    @(negedge clk);
     tl_cfg_h2d.a_address = addr;
     tl_cfg_h2d.a_opcode  = tlul_pkg::PutFullData;
     tl_cfg_h2d.a_size    = 2'h2;
@@ -82,7 +82,7 @@ module vertex_processor_tb;
 
     timeout = 0;
     while (!tl_cfg_d2h.a_ready && timeout < 20) begin
-      @(posedge clk);
+      @(negedge clk);
       timeout = timeout + 1;
     end
     if (!tl_cfg_d2h.a_ready) begin
@@ -91,11 +91,12 @@ module vertex_processor_tb;
     end
     @(posedge clk);
 
+    @(negedge clk);
     tl_cfg_h2d.a_valid = 1'b0;
     tl_cfg_h2d.d_ready = 1'b1;
     timeout = 0;
     while (!tl_cfg_d2h.d_valid && timeout < 20) begin
-      @(posedge clk);
+      @(negedge clk);
       timeout = timeout + 1;
     end
     if (!tl_cfg_d2h.d_valid) begin
@@ -103,6 +104,7 @@ module vertex_processor_tb;
       errcnt = errcnt + 1;
     end
     @(posedge clk);
+    @(negedge clk);
     tl_cfg_h2d.d_ready = 1'b0;
   endtask
 
@@ -111,7 +113,7 @@ module vertex_processor_tb;
       output logic [31:0] rdata
   );
     int unsigned timeout;
-    @(posedge clk);
+    @(negedge clk);
     tl_cfg_h2d.a_address = addr;
     tl_cfg_h2d.a_opcode  = tlul_pkg::Get;
     tl_cfg_h2d.a_size    = 2'h2;
@@ -120,7 +122,7 @@ module vertex_processor_tb;
 
     timeout = 0;
     while (!tl_cfg_d2h.a_ready && timeout < 20) begin
-      @(posedge clk);
+      @(negedge clk);
       timeout = timeout + 1;
     end
     if (!tl_cfg_d2h.a_ready) begin
@@ -129,11 +131,12 @@ module vertex_processor_tb;
     end
     @(posedge clk);
 
+    @(negedge clk);
     tl_cfg_h2d.a_valid = 1'b0;
     tl_cfg_h2d.d_ready = 1'b1;
     timeout = 0;
     while (!tl_cfg_d2h.d_valid && timeout < 20) begin
-      @(posedge clk);
+      @(negedge clk);
       timeout = timeout + 1;
     end
     if (!tl_cfg_d2h.d_valid) begin
@@ -142,6 +145,7 @@ module vertex_processor_tb;
     end
     rdata = tl_cfg_d2h.d_data;
     @(posedge clk);
+    @(negedge clk);
     tl_cfg_h2d.d_ready = 1'b0;
   endtask
 
@@ -150,7 +154,7 @@ module vertex_processor_tb;
       input logic [31:0] wdata
   );
     int unsigned timeout;
-    @(posedge clk);
+    @(negedge clk);
     tl_vec_h2d.a_address = addr;
     tl_vec_h2d.a_opcode  = tlul_pkg::PutFullData;
     tl_vec_h2d.a_size    = 2'h2;
@@ -160,7 +164,7 @@ module vertex_processor_tb;
 
     timeout = 0;
     while (!tl_vec_d2h.a_ready && timeout < 20) begin
-      @(posedge clk);
+      @(negedge clk);
       timeout = timeout + 1;
     end
     if (!tl_vec_d2h.a_ready) begin
@@ -169,11 +173,12 @@ module vertex_processor_tb;
     end
     @(posedge clk);
 
+    @(negedge clk);
     tl_vec_h2d.a_valid = 1'b0;
     tl_vec_h2d.d_ready = 1'b1;
     timeout = 0;
     while (!tl_vec_d2h.d_valid && timeout < 20) begin
-      @(posedge clk);
+      @(negedge clk);
       timeout = timeout + 1;
     end
     if (!tl_vec_d2h.d_valid) begin
@@ -181,6 +186,7 @@ module vertex_processor_tb;
       errcnt = errcnt + 1;
     end
     @(posedge clk);
+    @(negedge clk);
     tl_vec_h2d.d_ready = 1'b0;
   endtask
 
