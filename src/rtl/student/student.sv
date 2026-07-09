@@ -30,7 +30,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 5;
+  localparam int N = 6;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -156,22 +156,34 @@ module student (
 
   /* Fixed-function rasterization pipeline */
 
-  matmul matmul_i (
+  logic                         vertex_out_valid;
+  logic [9:0]                   vertex_out_id;
+  logic signed [31:0]           vertex_out_vec [3:0];
+  (* mark_debug = "true" *)
+  logic [138:0]                 vertex_debug;
+
+  assign vertex_debug = {
+    vertex_out_valid,
+    vertex_out_id,
+    vertex_out_vec[0],
+    vertex_out_vec[1],
+    vertex_out_vec[2],
+    vertex_out_vec[3]
+  };
+
+  vertex_processor vertex_processor_i (
     .clk_i,
     .rst_ni,
 
-    .tl_ctrl_i(tl_devices_h2d[4]),
-    .tl_ctrl_o(tl_devices_d2h[4]),
+    .tl_cfg_i(tl_devices_h2d[4]),
+    .tl_cfg_o(tl_devices_d2h[4]),
+    .tl_vec_i(tl_devices_h2d[5]),
+    .tl_vec_o(tl_devices_d2h[5]),
 
-    .data_i   ('{default: '0}),
-    .data_o   (),
-
-    .valid_i  (1'b0),
-    .id_i     ('0),
-    .ready_o  (),
-    .valid_o  (),
-    .id_o     (),
-    .ready_i  (1'b1)
+    .out_valid_o(vertex_out_valid),
+    .out_ready_i(1'b1),
+    .out_id_o   (vertex_out_id),
+    .out_vec_o  (vertex_out_vec)
   );
 
 endmodule
