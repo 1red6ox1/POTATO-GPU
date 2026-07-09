@@ -5,3 +5,4 @@ vivado*.jou
 vivado*.log
 .Xil/
 obj_dir/
+FPGA_NEXT_STEPS_PLAN.md
