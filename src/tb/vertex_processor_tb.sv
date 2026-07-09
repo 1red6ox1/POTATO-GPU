@@ -20,8 +20,8 @@ module vertex_processor_tb;
   typedef out_t out_vector_t[MAT_DIM];
   typedef out_vector_t expected_vectors_t[NUM_TRIS][NUM_VERTS];
 
-  logic clk;
-  logic rst_n;
+  logic clk = 1'b0;
+  logic rst_n = 1'b0;
 
   tlul_pkg::tl_h2d_t tl_cfg_h2d;
   tlul_pkg::tl_d2h_t tl_cfg_d2h;
@@ -38,12 +38,7 @@ module vertex_processor_tb;
   localparam tlul_pkg::tl_h2d_t TlIdle = '{a_opcode: tlul_pkg::PutFullData, default: '0};
 
   // 50 MHz
-  always begin
-    clk = 1'b1;
-    #10000;
-    clk = 1'b0;
-    #10000;
-  end
+  always #10000 clk = ~clk;
 
   vertex_processor #(
       .DATA_WIDTH(DATA_WIDTH),
@@ -249,9 +244,6 @@ module vertex_processor_tb;
   endtask
 
   task automatic reset_dut();
-    rst_n = 1'b1;
-    clear_inputs();
-    @(negedge clk);
     rst_n = 1'b0;
     clear_inputs();
     repeat (4) @(posedge clk);
