@@ -44,8 +44,8 @@ module vertex_processor_tb;
       .DATA_WIDTH(DATA_WIDTH),
       .OUT_WIDTH (OUT_WIDTH)
   ) DUT (
-      .clk(clk),
-      .rst_n(rst_n),
+      .clk_i(clk),
+      .rst_ni(rst_n),
       .tl_cfg_i(tl_cfg_h2d),
       .tl_cfg_o(tl_cfg_d2h),
       .tl_vec_i(tl_vec_h2d),

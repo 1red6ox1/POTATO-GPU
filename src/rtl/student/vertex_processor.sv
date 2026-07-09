@@ -17,8 +17,8 @@ module vertex_processor #(
     parameter int                         TRI_ID_WIDTH = 10,
     parameter int                         VTX_ID_WIDTH = 2
 ) (
-    input  logic                          clk,
-    input  logic                          rst_n,
+    input  logic                          clk_i,
+    input  logic                          rst_ni,
          
     input  tlul_pkg::tl_h2d_t             tl_cfg_i,
     output tlul_pkg::tl_d2h_t             tl_cfg_o,
@@ -88,8 +88,8 @@ module vertex_processor #(
         .ErrOnWrite(0),
         .ErrOnRead(0)
     ) u_tlul_adapter_sram_vec (
-        .clk_i(clk),
-        .rst_ni(rst_n),
+        .clk_i(clk_i),
+        .rst_ni(rst_ni),
         .tl_i(tl_vec_i),
         .tl_o(tl_vec_o),
         .req_o(vec_req),
@@ -109,23 +109,23 @@ module vertex_processor #(
             .DEPTH     (RAM_DEPTH),
             .ADDR_WIDTH(ADDR_WIDTH)
         ) u_dpram_lane (
-            .clk_i      (clk),
-            .rw_addr    ({vec_sram_addr[VEC_SRAM_AW-1:4], vec_sram_addr[3:2]}),
-            .rw_en      (vec_req && (vec_sram_addr[1:0] == lane[1:0])),
-            .rw_we      (vec_req && vec_we && (vec_sram_addr[1:0] == lane[1:0])),
-            .rw_data_in (data_t'(vec_wdata & vec_wmask)),
-            .rw_data_out(dpram_rw_data_out[lane]),
-            .r_addr     ({launch_triangle_q, launch_vertex_q}),
-            .r_en       (read_fire),
-            .r_data_out (matmul_vec[lane])
+            .clk_i    (clk_i),
+            .rw_addr_i({vec_sram_addr[VEC_SRAM_AW-1:4], vec_sram_addr[3:2]}),
+            .rw_en_i  (vec_req && (vec_sram_addr[1:0] == lane[1:0])),
+            .rw_we_i  (vec_req && vec_we && (vec_sram_addr[1:0] == lane[1:0])),
+            .rw_data_i(data_t'(vec_wdata & vec_wmask)),
+            .rw_data_o(dpram_rw_data_out[lane]),
+            .r_addr_i ({launch_triangle_q, launch_vertex_q}),
+            .r_en_i   (read_fire),
+            .r_data_o (matmul_vec[lane])
         );
     end
 
     matmul #(
         .ID_WIDTH(TRI_ID_WIDTH)
     ) u_matmul (
-        .clk_i    (clk),
-        .rst_ni   (rst_n),
+        .clk_i    (clk_i),
+        .rst_ni   (rst_ni),
         .tl_ctrl_i(tl_cfg_i),
         .tl_ctrl_o(tl_cfg_o),
         .data_i   (matmul_vec),
@@ -140,8 +140,8 @@ module vertex_processor #(
 
     assign vec_rdata = dpram_rw_data_out[vec_read_lane_q];
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
             launch_triangle_q <= '0;
             launch_vertex_q <= '0;
             last_stored_triangle_q <= '0;

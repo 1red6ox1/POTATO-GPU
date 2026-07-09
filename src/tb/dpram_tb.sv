@@ -31,15 +31,15 @@ module dpram_tb;
       .DEPTH(DEPTH),
       .ADDR_WIDTH(ADDR_WIDTH)
   ) DUT (
-      .clk(clk),
-      .rw_addr(rw_addr),
-      .rw_en(rw_en),
-      .rw_we(rw_we),
-      .rw_data_in(rw_data_in),
-      .rw_data_out(rw_data_out),
-      .r_addr(r_addr),
-      .r_en(r_en),
-      .r_data_out(r_data_out)
+      .clk_i(clk),
+      .rw_addr_i(rw_addr),
+      .rw_en_i(rw_en),
+      .rw_we_i(rw_we),
+      .rw_data_i(rw_data_in),
+      .rw_data_o(rw_data_out),
+      .r_addr_i(r_addr),
+      .r_en_i(r_en),
+      .r_data_o(r_data_out)
   );
 
   task automatic clear_inputs();
