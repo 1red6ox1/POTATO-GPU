@@ -15,6 +15,7 @@ module vertex_processor_tb;
   localparam int NUM_VERTS = 3;
   localparam logic [31:0] VERTEX_TRIANGLE_COUNT_ADDR = 32'h0000_0040;
   localparam logic [31:0] VERTEX_START_RENDER_ADDR   = 32'h0000_0044;
+  localparam int STAGE_PAUSE_CYCLES = 8;
 
   typedef data_t matrix_t[MAT_DIM][MAT_DIM];
   typedef data_t vector_t[MAT_DIM];
@@ -62,6 +63,13 @@ module vertex_processor_tb;
     out_ready = 1'b1;
     tl_cfg_h2d = TlIdle;
     tl_vec_h2d = TlIdle;
+  endtask
+
+  task automatic stage_pause(input string name);
+    $display("[vertex_processor_tb] pause: %s (%0d cycles)", name, STAGE_PAUSE_CYCLES);
+    tl_cfg_h2d = TlIdle;
+    tl_vec_h2d = TlIdle;
+    repeat (STAGE_PAUSE_CYCLES) @(posedge clk);
   endtask
 
   task automatic cfg_tl_put(
@@ -264,6 +272,7 @@ module vertex_processor_tb;
     rst_n = 1'b1;
     @(posedge clk);
     $display("[vertex_processor_tb] reset: done");
+    stage_pause("after reset");
   endtask
 
   task automatic wait_and_check_output(
@@ -492,15 +501,20 @@ module vertex_processor_tb;
     $display("[vertex_processor_tb] camera%0d: start", camera_id);
     set_world_vectors(world);
     set_camera_case(camera_id, matrix, expected);
+    stage_pause($sformatf("camera%0d setup complete", camera_id));
 
     $display("[vertex_processor_tb] camera%0d: configure matrix", camera_id);
     out_ready = 1'b1;
     clear_cfg_matrix();
+    stage_pause($sformatf("camera%0d after matrix clear", camera_id));
     write_cfg_matrix(matrix);
+    stage_pause($sformatf("camera%0d after matrix write", camera_id));
     check_cfg_matrix(matrix, $sformatf("camera%0d", camera_id));
+    stage_pause($sformatf("camera%0d after matrix readback", camera_id));
 
     $display("[vertex_processor_tb] camera%0d: load vector RAM", camera_id);
     out_ready = 1'b0;
+    stage_pause($sformatf("camera%0d before vector load", camera_id));
     for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
       $display("[vertex_processor_tb] camera%0d: load triangle %0d", camera_id, triangle_idx);
       for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
@@ -509,11 +523,15 @@ module vertex_processor_tb;
         write_vector(TRI_ID_WIDTH'(triangle_idx), VTX_ID_WIDTH'(vtx),
             world[triangle_idx][vtx]);
       end
+      stage_pause($sformatf("camera%0d after triangle %0d load", camera_id, triangle_idx));
     end
 
     $display("[vertex_processor_tb] camera%0d: configure render control", camera_id);
+    stage_pause($sformatf("camera%0d before render control", camera_id));
     set_triangle_count(TRI_ID_WIDTH'(NUM_TRIS - 1));
+    stage_pause($sformatf("camera%0d after triangle_count write", camera_id));
     start_render();
+    stage_pause($sformatf("camera%0d after start_render write", camera_id));
 
     $display("[vertex_processor_tb] camera%0d: check rendered outputs", camera_id);
     for (int triangle_idx = 0; triangle_idx < NUM_TRIS; triangle_idx = triangle_idx + 1) begin
@@ -521,6 +539,7 @@ module vertex_processor_tb;
         name = $sformatf("camera%0d_tri%0d_p%0d", camera_id, triangle_idx, vtx);
         wait_and_check_output(
             TRI_ID_WIDTH'(triangle_idx), expected[triangle_idx][vtx], name, vtx == 0);
+        stage_pause($sformatf("after %s output check", name));
       end
     end
     $display("[vertex_processor_tb] camera%0d: done", camera_id);
