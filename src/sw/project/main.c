@@ -104,21 +104,52 @@ int16_t clamp(int16_t x, int16_t low, int16_t high) {
     return x;
 }
 
-typedef int32_t edgefn_coeffs[3];
+typedef int32_t affine_coeffs[3];
+typedef int64_t affine_pcoeffs[3];
 
-void gen_edgefn_coeffs(edgefn_coeffs dest, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+void gen_edgefn_coeffs(affine_coeffs dest, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     dest[0] = y1 - y0;
     dest[1] = x0 - x1;
     dest[2] = x1 * y0 - x0 * y1;
 }
 
-int32_t edgefn(edgefn_coeffs coeffs, int32_t x, int32_t y) {
+void gen_attrib_coeffs(
+    affine_pcoeffs dest,
+    fixed_t a0, fixed_t a1, fixed_t a2,
+    affine_coeffs e0, affine_coeffs e1, affine_coeffs e2
+) {
+    int64_t a0e0a = (int64_t)a0 * e0[0];
+    int64_t a1e1a = (int64_t)a1 * e1[0];
+    int64_t a2e2a = (int64_t)a2 * e2[0];
+    dest[0] = a0e0a + a1e1a + a2e2a;
+    int64_t a0e0b = (int64_t)a0 * e0[1];
+    int64_t a1e1b = (int64_t)a1 * e1[1];
+    int64_t a2e2b = (int64_t)a2 * e2[1];
+    dest[1] = a0e0b + a1e1b + a2e2b;
+    int64_t a0e0c = (int64_t)a0 * e0[2];
+    int64_t a1e1c = (int64_t)a1 * e1[2];
+    int64_t a2e2c = (int64_t)a2 * e2[2];
+    dest[2] = a0e0c + a1e1c + a2e2c;
+}
+
+int32_t affine_eval(affine_coeffs coeffs, int32_t x, int32_t y) {
     return coeffs[0] * x + coeffs[1] * y + coeffs[2];
 }
 
-void rasterize_tri(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+int64_t affine_peval(affine_pcoeffs pcoeffs, int32_t x, int32_t y) {
+    return pcoeffs[0] * x + pcoeffs[1] * y + pcoeffs[2];
+}
+
+void rasterize_tri(
+    uint8_t fbid,
+    int16_t x0, int16_t y0, fixed_t w0,
+    int16_t x1, int16_t y1, fixed_t w1,
+    int16_t x2, int16_t y2, fixed_t w2
+) {
+
     int16_t min_x, max_x;
     int16_t min_y, max_y;
+
     min_x = x0;
     if (x1 < min_x) min_x = x1;
     if (x2 < min_x) min_x = x2;
@@ -137,44 +168,98 @@ void rasterize_tri(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1,
     min_y = clamp(min_y, 0, 1079);
     max_y = clamp(max_y, 0, 1079);
 
-    edgefn_coeffs ab;
-    edgefn_coeffs bc;
-    edgefn_coeffs ca;
+    affine_coeffs ab;
+    affine_coeffs bc;
+    affine_coeffs ca;
 
     gen_edgefn_coeffs(ab, x0, y0, x1, y1);
     gen_edgefn_coeffs(bc, x1, y1, x2, y2);
     gen_edgefn_coeffs(ca, x2, y2, x0, y0);
 
-    int32_t ab_startval = edgefn(ab, min_x, min_y);
-    int32_t bc_startval = edgefn(bc, min_x, min_y);
-    int32_t ca_startval = edgefn(ca, min_x, min_y);
+    /* UV coordinates are fixed by vertex */
+    const fixed_t u0 = 0x00000000;
+    const fixed_t v0 = 0x00000000;
+    const fixed_t u1 = 0x00010000;
+    const fixed_t v1 = 0x00000000;
+    const fixed_t u2 = 0x00000000;
+    const fixed_t v2 = 0x00010000;
+
+    fixed_t udivw0 = fixed_div(u0, w0);
+    fixed_t vdivw0 = fixed_div(v0, w0);
+    fixed_t udivw1 = fixed_div(u1, w1);
+    fixed_t vdivw1 = fixed_div(v1, w1);
+    fixed_t udivw2 = fixed_div(u2, w2);
+    fixed_t vdivw2 = fixed_div(v2, w2);
+
+    // 2**31 / (2**16 * wi) = 2**15 / wi
+    fixed_t w_rcp0 = (0x80000000 / w0) << 1;
+    fixed_t w_rcp1 = (0x80000000 / w1) << 1;
+    fixed_t w_rcp2 = (0x80000000 / w2) << 1;
+
+    int32_t tri_area = affine_eval(ab, x2, y2);
+    ab[0] = ((int64_t)ab[0] << 16) / tri_area;
+    ab[1] = ((int64_t)ab[1] << 16) / tri_area;
+    ab[2] = ((int64_t)ab[2] << 16) / tri_area;
+    bc[0] = ((int64_t)bc[0] << 16) / tri_area;
+    bc[1] = ((int64_t)bc[1] << 16) / tri_area;
+    bc[2] = ((int64_t)bc[2] << 16) / tri_area;
+    ca[0] = ((int64_t)ca[0] << 16) / tri_area;
+    ca[1] = ((int64_t)ca[1] << 16) / tri_area;
+    ca[2] = ((int64_t)ca[2] << 16) / tri_area;
+
+    affine_pcoeffs u_num;
+    affine_pcoeffs v_num;
+    affine_pcoeffs uv_denom;
+
+    u_num[0] = (int64_t)bc[0] * udivw1;
+    u_num[1] = (int64_t)bc[1] * udivw1;
+    u_num[2] = (int64_t)bc[2] * udivw1;
+
+    v_num[0] = (int64_t)ca[0] * vdivw2;
+    v_num[1] = (int64_t)ca[1] * vdivw2;
+    v_num[2] = (int64_t)ca[2] * vdivw2;
+
+    gen_attrib_coeffs(uv_denom, w_rcp0, w_rcp1, w_rcp2, ab, bc, ca);
+
+    int32_t ab_startval = affine_eval (ab,       min_x, min_y);
+    int32_t bc_startval = affine_eval (bc,       min_x, min_y);
+    int32_t ca_startval = affine_eval (ca,       min_x, min_y);
+    int64_t un_startval = affine_peval(u_num,    min_x, min_y);
+    int64_t vn_startval = affine_peval(v_num,    min_x, min_y);
+    int64_t iw_startval = affine_peval(uv_denom, min_x, min_y);
 
     int32_t ab_val, bc_val, ca_val;
+    int64_t un_val, vn_val, iw_val;
 
-    int32_t tri_area = edgefn(ab, x2, y2);
-    int32_t area_scaled = tri_area >> 8;
-
-    int32_t bary0, bary1, bary2;
+    int64_t bary0, bary1, bary2;
 
     for (int y = min_y; y <= max_y; y++) {
         ab_val = ab_startval;
         bc_val = bc_startval;
         ca_val = ca_startval;
+        un_val = un_startval;
+        vn_val = vn_startval;
+        iw_val = iw_startval;
 
         for (int x = min_x; x <= max_x; x++) {
             if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
-                bary0 = ab_val / area_scaled;
-                bary1 = bc_val / area_scaled;
-                bary2 = ca_val / area_scaled;
-                set_pixel(fbid, x, y, bary0, bary1, bary2);
+                bary0 = (un_val << 8) / iw_val;
+                bary1 = (vn_val << 8) / iw_val;
+                set_pixel(fbid, x, y, bary0, bary1, 255 - bary0 - bary1);
             }
             ab_val += ab[0];
             bc_val += bc[0];
             ca_val += ca[0];
+            un_val += u_num[0];
+            vn_val += v_num[0];
+            iw_val += uv_denom[0];
         }
         ab_startval = ab_startval + ab[1];
         bc_startval = bc_startval + bc[1];
         ca_startval = ca_startval + ca[1];
+        un_startval = un_startval + u_num[1];
+        vn_startval = vn_startval + v_num[1];
+        iw_startval = iw_startval + uv_denom[1];
     }
 }
 
@@ -189,7 +274,7 @@ void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
     viewport_transform(clip_p1, &x1, &y1);
     viewport_transform(clip_p2, &x2, &y2);
 
-    rasterize_tri(fbid, x0, y0, x1, y1, x2, y2);
+    rasterize_tri(fbid, x0, y0, clip_p0[3], x1, y1, clip_p1[3], x2, y2, clip_p2[3]);
 
     // Flush DDR cache
     for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
@@ -309,18 +394,25 @@ int main(void) {
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
+            V4(0, 1, 1, 1),
+            V4(0, 0, 1, 1)
+        }, VP, fbid);
+
+        render_tri((triangle_t){
+            V4(0, 0, 0, 1),
             V4(1, 1, 0, 1),
             V4(1, 0, 0, 1)
         }, VP, fbid);
 
         render_tri((triangle_t){
-            V4(2, 0, 0, 1),
-            V4(3, 3, 0, 1),
-            V4(3, 0, 0, 1)
+            V4(0, 0, 0, 1),
+            V4(1, 1, 0, 1),
+            V4(0, 1, 1, 1)
         }, VP, fbid);
 
         REG32(HDMI_CTRL_FBID(0)) = fbid;
         fbid = (fbid + 1) % 4;
+
     }
 
     return 0;
