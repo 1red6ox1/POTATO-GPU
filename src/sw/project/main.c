@@ -170,6 +170,8 @@ void rasterize_tri(
     min_y = (clamp(min_y, 0, 1079 << 3) & ~7) - 1;
     max_y = clamp(max_y, 0, 1079 << 3) | 7;
 
+    min_x = min_x & ~255;
+
     affine_pcoeffs ab;
     affine_pcoeffs bc;
     affine_pcoeffs ca;
@@ -204,7 +206,56 @@ void rasterize_tri(
     int64_t vn_startval = affine_peval(v_num,    min_x, min_y);
     int64_t iw_startval = affine_peval(uv_denom, min_x, min_y);
 
-    int64_t ab_val, bc_val, ca_val;
+    printf("START VALUES: %08x%08x/%08x%08x/%08x%08x/%08x%08x/%08x%08x/%08x%08x\n",
+        (int32_t)(ab_startval >> 32), (int32_t)ab_startval,
+        (int32_t)(bc_startval >> 32), (int32_t)bc_startval,
+        (int32_t)(ca_startval >> 32), (int32_t)ca_startval,
+        (int32_t)(un_startval >> 32), (int32_t)un_startval,
+        (int32_t)(vn_startval >> 32), (int32_t)vn_startval,
+        (int32_t)(iw_startval >> 32), (int32_t)iw_startval
+    );
+
+    printf("DIFFS:\n");
+    printf("  AB: %08x/%08x\n", (int32_t)ab[0], (int32_t)ab[1]);
+    printf("  BC: %08x/%08x\n", (int32_t)bc[0], (int32_t)bc[1]);
+    printf("  CA: %08x/%08x\n", (int32_t)ca[0], (int32_t)ca[1]);
+    printf("  UN: %08x/%08x\n", (int32_t)u_num[0], (int32_t)u_num[1]);
+    printf("  VN: %08x/%08x\n", (int32_t)v_num[0], (int32_t)v_num[1]);
+    printf("  IW: %08x/%08x\n", (int32_t)uv_denom[0], (int32_t)uv_denom[1]);
+
+    printf("BBOX: %d/%d/%d/%d\n", min_x, min_y, max_x, max_y);
+
+    REG32(RASTERIZER_CTRL_FBID(0)) = fbid;
+    REG32(RASTERIZER_CTRL_AB_TOPLEFT_HI(0)) = (int32_t)(ab_startval >> 32);
+    REG32(RASTERIZER_CTRL_AB_TOPLEFT_LO(0)) = (int32_t)(ab_startval);
+    REG32(RASTERIZER_CTRL_BC_TOPLEFT_HI(0)) = (int32_t)(bc_startval >> 32);
+    REG32(RASTERIZER_CTRL_BC_TOPLEFT_LO(0)) = (int32_t)(bc_startval);
+    REG32(RASTERIZER_CTRL_CA_TOPLEFT_HI(0)) = (int32_t)(ca_startval >> 32);
+    REG32(RASTERIZER_CTRL_CA_TOPLEFT_LO(0)) = (int32_t)(ca_startval);
+    REG32(RASTERIZER_CTRL_UN_TOPLEFT_HI(0)) = (int32_t)(un_startval >> 32);
+    REG32(RASTERIZER_CTRL_UN_TOPLEFT_LO(0)) = (int32_t)(un_startval);
+    REG32(RASTERIZER_CTRL_VN_TOPLEFT_HI(0)) = (int32_t)(vn_startval >> 32);
+    REG32(RASTERIZER_CTRL_VN_TOPLEFT_LO(0)) = (int32_t)(vn_startval);
+    REG32(RASTERIZER_CTRL_IW_TOPLEFT_HI(0)) = (int32_t)(iw_startval >> 32);
+    REG32(RASTERIZER_CTRL_IW_TOPLEFT_LO(0)) = (int32_t)(iw_startval);
+    REG32(RASTERIZER_CTRL_AB_DX(0)) = (int32_t)ab[0];
+    REG32(RASTERIZER_CTRL_AB_DY(0)) = (int32_t)ab[1];
+    REG32(RASTERIZER_CTRL_BC_DX(0)) = (int32_t)bc[0];
+    REG32(RASTERIZER_CTRL_BC_DY(0)) = (int32_t)bc[1];
+    REG32(RASTERIZER_CTRL_CA_DX(0)) = (int32_t)ca[0];
+    REG32(RASTERIZER_CTRL_CA_DY(0)) = (int32_t)ca[1];
+    REG32(RASTERIZER_CTRL_UN_DX(0)) = (int32_t)u_num[0];
+    REG32(RASTERIZER_CTRL_UN_DY(0)) = (int32_t)u_num[1];
+    REG32(RASTERIZER_CTRL_VN_DX(0)) = (int32_t)v_num[0];
+    REG32(RASTERIZER_CTRL_VN_DY(0)) = (int32_t)v_num[1];
+    REG32(RASTERIZER_CTRL_IW_DX(0)) = (int32_t)uv_denom[0];
+    REG32(RASTERIZER_CTRL_IW_DY(0)) = (int32_t)uv_denom[1];
+
+    REG32(RASTERIZER_CTRL_STATUS(0)) = 1;
+
+    while (RASTERIZER_CTRL_STATUS(0) > 0);
+
+    /*int64_t ab_val, bc_val, ca_val;
     int64_t ab_yofs, bc_yofs, ca_yofs;
     int64_t ab_ofs, bc_ofs, ca_ofs; // shifted by 16
     int64_t un_val, vn_val, iw_val;
@@ -232,6 +283,7 @@ void rasterize_tri(
             ab_val = ab_startval + ab_ofs;
             bc_val = bc_startval + bc_ofs;
             ca_val = ca_startval + ca_ofs;
+            set_pixel(fbid, x>>3, y>>3, 255, 255, 255);
             if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
                 un_val = un_startval + un_ofs;
                 vn_val = vn_startval + vn_ofs;
@@ -253,7 +305,7 @@ void rasterize_tri(
         un_yofs += u_num[1] << 3;
         vn_yofs += v_num[1] << 3;
         iw_yofs += uv_denom[1] << 3;
-    }
+    }*/
 }
 
 void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
@@ -363,7 +415,7 @@ void testcases() {
 int main(void) {
     ddr_init();
 
-    vec3_t camera_pos = {F(5), F(2), F(-2)};
+    vec3_t camera_pos = {F(5), F(2), F(-6)};
     matrix_t view_mat, proj_mat, VP;
     persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
 
@@ -376,20 +428,32 @@ int main(void) {
     REG32(HDMI_CTRL_FBID(0)) = 0;
 
     while (1) {
-        cmd_clear_fb(fbid, 0, 0, 0);
+        //cmd_clear_fb(fbid, 0, 0, 0);
 
         // Projection matrix stays the same, adjust view matrix and regenerate VP
         lookat_mat(view_mat, camera_pos, V3(0, 0, 0), V3(0, 1, 0));
         mat_mat_mul(VP, proj_mat, view_mat);
 
-        camera_pos[2] = camera_pos[2] + 0x00002000;
-        if (camera_pos[2] > (8 << 16)) camera_pos[2] = -5 << 16;
+        //camera_pos[2] = camera_pos[2] + 0x00002000;
+        //if (camera_pos[2] > (8 << 16)) camera_pos[2] = -5 << 16;
+
+        /*render_tri((triangle_t){
+            V4(0, 0, -1, 1),
+            V4(0, 1, 0, 1),
+            V4(0, 0, 0, 1)
+        }, VP, fbid);*/
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
             V4(0, 1, 1, 1),
             V4(0, 0, 1, 1)
         }, VP, fbid);
+
+        /*render_tri((triangle_t){
+            V4(0, 0, 1, 1),
+            V4(0, 1, 2, 1),
+            V4(0, 0, 2, 1)
+        }, VP, fbid);*/
 
         /*render_tri((triangle_t){
             V4(0, 0, 0, 1),

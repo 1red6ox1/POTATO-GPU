@@ -1,0 +1,281 @@
+// Copyright David Schröder 2026.
+
+{
+	name: "rasterizer_ctrl"
+	clock_primary: "sys_clk"
+	bus_device: "tlul"
+	regwidth: "32"
+	registers: [
+		{
+			name: "fbid"
+			desc: "Framebuffer ID"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "1:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "status"
+			desc: "DMA Status, 0=Idle, 1=Active"
+			swaccess: "rw"
+			hwaccess: "hrw"
+			hwqe: "true"
+			fields: [
+				{bits: "0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ab_topleft_lo"
+			desc: "Low word of AB init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ab_topleft_hi"
+			desc: "High word of AB init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "bc_topleft_lo"
+			desc: "Low word of BC init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "bc_topleft_hi"
+			desc: "High word of BC init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ca_topleft_lo"
+			desc: "Low word of CA init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ca_topleft_hi"
+			desc: "High word of CA init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "un_topleft_lo"
+			desc: "Low word of UN init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "un_topleft_hi"
+			desc: "High word of UN init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "vn_topleft_lo"
+			desc: "Low word of VN init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "vn_topleft_hi"
+			desc: "High word of VN init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "iw_topleft_lo"
+			desc: "Low word of IW init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "iw_topleft_hi"
+			desc: "High word of IW init value"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ab_dx"
+			desc: "DX of AB edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ab_dy"
+			desc: "DY of AB edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "bc_dx"
+			desc: "DX of BC edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "bc_dy"
+			desc: "DY of BC edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ca_dx"
+			desc: "DX of CA edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "ca_dy"
+			desc: "DY of CA edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "un_dx"
+			desc: "DX of UN interpolation"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "un_dy"
+			desc: "DY of UN interpolation"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "vn_dx"
+			desc: "DX of VN interpolation"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "vn_dy"
+			desc: "DY of VN interpolation"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "iw_dx"
+			desc: "DX of IW interpolation"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "iw_dy"
+			desc: "DY of IW interpolation"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "31:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "min_x"
+			desc: "Bounding box left edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "15:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "min_y"
+			desc: "Bounding box top edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "15:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "max_x"
+			desc: "Bounding box right edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "15:0", name: "val", desc: "value"}
+			]
+		}
+		{
+			name: "max_y"
+			desc: "Bounding box bottom edge"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [
+				{bits: "15:0", name: "val", desc: "value"}
+			]
+		}
+	]
+}

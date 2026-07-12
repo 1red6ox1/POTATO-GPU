@@ -44,4 +44,7 @@ int ddr_init(void);
 #define MATMUL_CTRL0_BASE_ADDR VERTEX_CFG0_BASE_ADDR
 #define VERTEX_DATA0_BASE_ADDR 0x10500000
 
+#include <reggen/rasterizer_ctrl.h>
+#define RASTERIZER_CTRL0_BASE_ADDR 0x10600000
+
 #endif // _RVLAB_H

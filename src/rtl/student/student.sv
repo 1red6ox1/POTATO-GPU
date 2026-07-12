@@ -30,7 +30,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 6;
+  localparam int N = 7;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -83,7 +83,7 @@ module student (
     .irq_o (irq_o)
   );
 
-  localparam int DDR_XBAR_N = 3;
+  localparam int DDR_XBAR_N = 4;
 
   rvlab_ddr_pkg::ddr3_h2d_t xbar_reqs [DDR_XBAR_N-1:0];
   rvlab_ddr_pkg::ddr3_d2h_t xbar_rsps [DDR_XBAR_N-1:0];
@@ -184,6 +184,15 @@ module student (
     .out_ready_i(1'b1),
     .out_id_o   (vertex_out_id),
     .out_vec_o  (vertex_out_vec)
+  );
+
+  rasterizer rasterizer_i (
+    .clk_i,
+    .rst_ni,
+    .tl_cfg_i(tl_devices_h2d[6]),
+    .tl_cfg_o(tl_devices_d2h[6]),
+    .ddr_o   (xbar_reqs[3]),
+    .ddr_i   (xbar_rsps[3])
   );
 
 endmodule

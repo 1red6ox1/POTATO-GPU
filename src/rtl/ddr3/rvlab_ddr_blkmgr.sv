@@ -105,25 +105,28 @@ module rvlab_ddr_blkmgr #(
       Primed: begin
         case (req_i.a_opcode)
           PutPartialData: begin
-            /* Fastest case: 64-bit write */
+            /* Fastest case: 128-bit write */
             if (req_i.a_valid && !reqbuf_full) wb_stb_o = '1;
             if (req_i.a_valid && !reqbuf_full) wb_we_o = '1;
-            if (req_i.a_mask[16]) begin
+            if (|req_i.a_mask[15:0]) begin
+              // Low dword write
+              wb_wmask_o = req_i.a_mask[15:0];
+              wb_wdata_o = req_i.a_data[127:0];
+            end else begin
               // High dword write
               wb_wmask_o = req_i.a_mask[31:16];
               wb_wdata_o = req_i.a_data[255:128];
               wb_blk_addr_o[0] = '1;
-            end else begin
-              // Low dword write
-              wb_wmask_o = req_i.a_mask[15:0];
-              wb_wdata_o = req_i.a_data[127:0];
             end
             if (!wb_stall_i && req_i.a_valid && !reqbuf_full) begin
+              if (|req_i.a_mask[15:0] && |req_i.a_mask[31:16]) begin
+                state_d = WriteHigh;
+              end
               rsp_o.a_ready = '1;
             end
           end
           PutFullData: begin
-            /* 128-bit write */
+            /* 256-bit write */
             if (req_i.a_valid && !reqbuf_full) wb_stb_o = '1;
             if (req_i.a_valid && !reqbuf_full) wb_we_o = '1;
             wb_wmask_o = req_i.a_mask[15:0];
@@ -134,7 +137,7 @@ module rvlab_ddr_blkmgr #(
             end
           end
           Get: begin
-            /* 128-bit read */
+            /* 256-bit read */
             if (req_i.a_valid && !reqbuf_full) wb_stb_o = '1;
             if (!wb_stall_i && req_i.a_valid && !reqbuf_full) begin
               state_d = ReadHigh;
