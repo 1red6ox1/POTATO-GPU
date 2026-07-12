@@ -42,12 +42,12 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
 typedef vec4_t triangle_t[3];
 
 void viewport_transform(vec4_t clip, int16_t* x, int16_t* y) {
-    fixed_t ndc_x = fixed_div(clip[0], clip[3]);
-    fixed_t ndc_y = fixed_div(clip[1], clip[3]);
-    fixed_t screen_x = ((ndc_x + (1<<16)) >> 1) * 1920;
-    fixed_t screen_y = ((ndc_y + (1<<16)) >> 1) * 1080;
+    fixed_t ndc8_x = fixed_div(clip[0] << 3, clip[3]);
+    fixed_t ndc8_y = fixed_div(clip[1] << 3, clip[3]);
+    fixed_t screen_x = ((ndc8_x + (8<<16)) >> 1) * 1920;
+    fixed_t screen_y = ((ndc8_y + (8<<16)) >> 1) * 1080;
     *x = screen_x >> 16;
-    *y = 1080 - (screen_y >> 16);
+    *y = (1080 << 3) - (screen_y >> 16);
 }
 
 void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
@@ -136,8 +136,12 @@ int32_t affine_eval(affine_coeffs coeffs, int32_t x, int32_t y) {
     return coeffs[0] * x + coeffs[1] * y + coeffs[2];
 }
 
+int32_t affine_eval2(affine_coeffs coeffs, int32_t x, int32_t y) {
+    return (((coeffs[0] >> 4) * x + (coeffs[1] >> 4) * y) >> 4) + coeffs[2];
+}
+
 int64_t affine_peval(affine_pcoeffs pcoeffs, int32_t x, int32_t y) {
-    return pcoeffs[0] * x + pcoeffs[1] * y + pcoeffs[2];
+    return (((pcoeffs[0] >> 4) * x + (pcoeffs[1] >> 4) * y) >> 4) + pcoeffs[2];
 }
 
 void rasterize_tri(
@@ -146,6 +150,12 @@ void rasterize_tri(
     int16_t x1, int16_t y1, fixed_t w1,
     int16_t x2, int16_t y2, fixed_t w2
 ) {
+
+    /*
+    xi / yi are subpixel coordinates
+    such that one increment of any parameter
+    corresponds to 1/8th of a pixel
+    */
 
     int16_t min_x, max_x;
     int16_t min_y, max_y;
@@ -163,10 +173,10 @@ void rasterize_tri(
     if (y1 > max_y) max_y = y1;
     if (y2 > max_y) max_y = y2;
 
-    min_x = clamp(min_x, 0, 1919);
-    max_x = clamp(max_x, 0, 1919);
-    min_y = clamp(min_y, 0, 1079);
-    max_y = clamp(max_y, 0, 1079);
+    min_x = (clamp(min_x, 0, 1919 << 3) & ~7) - 1;
+    max_x = clamp(max_x, 0, 1919 << 3) | 7;
+    min_y = (clamp(min_y, 0, 1079 << 3) & ~7) - 1;
+    max_y = clamp(max_y, 0, 1079 << 3) | 7;
 
     affine_coeffs ab;
     affine_coeffs bc;
@@ -197,14 +207,14 @@ void rasterize_tri(
     fixed_t w_rcp2 = (0x80000000 / w2) << 1;
 
     int32_t tri_area = affine_eval(ab, x2, y2);
-    ab[0] = ((int64_t)ab[0] << 16) / tri_area;
-    ab[1] = ((int64_t)ab[1] << 16) / tri_area;
+    ab[0] = ((int64_t)ab[0] << 24) / tri_area;
+    ab[1] = ((int64_t)ab[1] << 24) / tri_area;
     ab[2] = ((int64_t)ab[2] << 16) / tri_area;
-    bc[0] = ((int64_t)bc[0] << 16) / tri_area;
-    bc[1] = ((int64_t)bc[1] << 16) / tri_area;
+    bc[0] = ((int64_t)bc[0] << 24) / tri_area;
+    bc[1] = ((int64_t)bc[1] << 24) / tri_area;
     bc[2] = ((int64_t)bc[2] << 16) / tri_area;
-    ca[0] = ((int64_t)ca[0] << 16) / tri_area;
-    ca[1] = ((int64_t)ca[1] << 16) / tri_area;
+    ca[0] = ((int64_t)ca[0] << 24) / tri_area;
+    ca[1] = ((int64_t)ca[1] << 24) / tri_area;
     ca[2] = ((int64_t)ca[2] << 16) / tri_area;
 
     affine_pcoeffs u_num;
@@ -221,45 +231,62 @@ void rasterize_tri(
 
     gen_attrib_coeffs(uv_denom, w_rcp0, w_rcp1, w_rcp2, ab, bc, ca);
 
-    int32_t ab_startval = affine_eval (ab,       min_x, min_y);
-    int32_t bc_startval = affine_eval (bc,       min_x, min_y);
-    int32_t ca_startval = affine_eval (ca,       min_x, min_y);
+    int32_t ab_startval = affine_eval2(ab,       min_x, min_y);
+    int32_t bc_startval = affine_eval2(bc,       min_x, min_y);
+    int32_t ca_startval = affine_eval2(ca,       min_x, min_y);
     int64_t un_startval = affine_peval(u_num,    min_x, min_y);
     int64_t vn_startval = affine_peval(v_num,    min_x, min_y);
     int64_t iw_startval = affine_peval(uv_denom, min_x, min_y);
 
     int32_t ab_val, bc_val, ca_val;
+    int32_t ab_yofs, bc_yofs, ca_yofs;
+    int32_t ab_ofs, bc_ofs, ca_ofs; // shifted by 16
     int64_t un_val, vn_val, iw_val;
+    int64_t un_yofs, vn_yofs, iw_yofs;
+    int64_t un_ofs, vn_ofs, iw_ofs;
 
     int64_t bary0, bary1, bary2;
 
-    for (int y = min_y; y <= max_y; y++) {
-        ab_val = ab_startval;
-        bc_val = bc_startval;
-        ca_val = ca_startval;
-        un_val = un_startval;
-        vn_val = vn_startval;
-        iw_val = iw_startval;
+    ab_yofs = 0;
+    bc_yofs = 0;
+    ca_yofs = 0;
+    un_yofs = 0;
+    vn_yofs = 0;
+    iw_yofs = 0;
 
-        for (int x = min_x; x <= max_x; x++) {
+    for (int y = min_y; y <= max_y; y += 8) {
+        ab_ofs = ab_yofs;
+        bc_ofs = bc_yofs;
+        ca_ofs = ca_yofs;
+        un_ofs = un_yofs;
+        vn_ofs = vn_yofs;
+        iw_ofs = iw_yofs;
+
+        for (int x = min_x; x <= max_x; x += 8) {
+            ab_val = ab_startval + (ab_ofs >> 8);
+            bc_val = bc_startval + (bc_ofs >> 8);
+            ca_val = ca_startval + (ca_ofs >> 8);
             if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
+                un_val = un_startval + (un_ofs >> 8);
+                vn_val = vn_startval + (vn_ofs >> 8);
+                iw_val = iw_startval + (iw_ofs >> 8);
                 bary0 = (un_val << 8) / iw_val;
                 bary1 = (vn_val << 8) / iw_val;
-                set_pixel(fbid, x, y, bary0, bary1, 255 - bary0 - bary1);
+                set_pixel(fbid, x >> 3, y >> 3, bary0, bary1, 255 - bary0 - bary1);
             }
-            ab_val += ab[0];
-            bc_val += bc[0];
-            ca_val += ca[0];
-            un_val += u_num[0];
-            vn_val += v_num[0];
-            iw_val += uv_denom[0];
+            ab_ofs += ab[0] << 3;
+            bc_ofs += bc[0] << 3;
+            ca_ofs += ca[0] << 3;
+            un_ofs += u_num[0] << 3;
+            vn_ofs += v_num[0] << 3;
+            iw_ofs += uv_denom[0] << 3;
         }
-        ab_startval = ab_startval + ab[1];
-        bc_startval = bc_startval + bc[1];
-        ca_startval = ca_startval + ca[1];
-        un_startval = un_startval + u_num[1];
-        vn_startval = vn_startval + v_num[1];
-        iw_startval = iw_startval + uv_denom[1];
+        ab_yofs += ab[1] << 3;
+        bc_yofs += bc[1] << 3;
+        ca_yofs += ca[1] << 3;
+        un_yofs += u_num[1] << 3;
+        vn_yofs += v_num[1] << 3;
+        iw_yofs += uv_denom[1] << 3;
     }
 }
 
@@ -389,8 +416,8 @@ int main(void) {
         lookat_mat(view_mat, camera_pos, V3(0, 0, 0), V3(0, 1, 0));
         mat_mat_mul(VP, proj_mat, view_mat);
 
-        camera_pos[2] = camera_pos[2] + 0x00000400;
-        if (camera_pos[2] > (5 << 16)) camera_pos[2] = -5 << 16;
+        camera_pos[2] = camera_pos[2] + 0x00002000;
+        if (camera_pos[2] > (8 << 16)) camera_pos[2] = -5 << 16;
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
@@ -401,13 +428,13 @@ int main(void) {
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
             V4(1, 1, 0, 1),
-            V4(1, 0, 0, 1)
+            V4(0, 1, 1, 1)
         }, VP, fbid);
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
             V4(1, 1, 0, 1),
-            V4(0, 1, 1, 1)
+            V4(1, 0, 0, 1)
         }, VP, fbid);
 
         REG32(HDMI_CTRL_FBID(0)) = fbid;
