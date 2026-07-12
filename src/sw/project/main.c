@@ -133,7 +133,7 @@ void gen_attrib_coeffs(
 }
 
 int64_t affine_peval(affine_pcoeffs pcoeffs, int32_t x, int32_t y) {
-    return (((pcoeffs[0] >> 16) * x + (pcoeffs[1] >> 16) * y) + pcoeffs[2]) >> 16;
+    return pcoeffs[0] * x + pcoeffs[1] * y + pcoeffs[2];
 }
 
 void rasterize_tri(
@@ -198,28 +198,17 @@ void rasterize_tri(
     fixed_t w_rcp1 = (0x80000000 / w1) << 1;
     fixed_t w_rcp2 = (0x80000000 / w2) << 1;
 
-    int32_t tri_area = ab[0] * x2 + ab[1] * y2 + ab[2];
-    ab[0] = (ab[0] << 48) / tri_area;
-    ab[1] = (ab[1] << 48) / tri_area;
-    ab[2] = (ab[2] << 32) / tri_area;
-    bc[0] = (bc[0] << 48) / tri_area;
-    bc[1] = (bc[1] << 48) / tri_area;
-    bc[2] = (bc[2] << 32) / tri_area;
-    ca[0] = (ca[0] << 48) / tri_area;
-    ca[1] = (ca[1] << 48) / tri_area;
-    ca[2] = (ca[2] << 32) / tri_area;
-
     affine_pcoeffs u_num;
     affine_pcoeffs v_num;
     affine_pcoeffs uv_denom;
 
-    u_num[0] = (int64_t)bc[0] * udivw1;
-    u_num[1] = (int64_t)bc[1] * udivw1;
-    u_num[2] = (int64_t)bc[2] * udivw1;
+    u_num[0] = bc[0] * udivw1;
+    u_num[1] = bc[1] * udivw1;
+    u_num[2] = bc[2] * udivw1;
 
-    v_num[0] = (int64_t)ca[0] * vdivw2;
-    v_num[1] = (int64_t)ca[1] * vdivw2;
-    v_num[2] = (int64_t)ca[2] * vdivw2;
+    v_num[0] = ca[0] * vdivw2;
+    v_num[1] = ca[1] * vdivw2;
+    v_num[2] = ca[2] * vdivw2;
 
     gen_attrib_coeffs(uv_denom, w_rcp0, w_rcp1, w_rcp2, ab, bc, ca);
 
@@ -255,17 +244,16 @@ void rasterize_tri(
         iw_ofs = iw_yofs;
 
         for (int x = min_x; x <= max_x; x += 8) {
-            ab_val = ab_startval + (ab_ofs >> 32);
-            bc_val = bc_startval + (bc_ofs >> 32);
-            ca_val = ca_startval + (ca_ofs >> 32);
+            ab_val = ab_startval + ab_ofs;
+            bc_val = bc_startval + bc_ofs;
+            ca_val = ca_startval + ca_ofs;
             if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
-                set_pixel(fbid, x>>3, y>>3, 255, 255, 255);
-                un_val = un_startval + (un_ofs >> 32);
-                vn_val = vn_startval + (vn_ofs >> 32);
-                iw_val = iw_startval + (iw_ofs >> 32);
+                un_val = un_startval + un_ofs;
+                vn_val = vn_startval + vn_ofs;
+                iw_val = iw_startval + iw_ofs;
                 bary0 = (un_val << 8) / iw_val;
                 bary1 = (vn_val << 8) / iw_val;
-                set_pixel(fbid, x >> 3, y >> 3, bary0, bary1, 255 - bary0 - bary1);
+                set_pixel(fbid, x >> 3, y >> 3, bary0, bary1, 255-bary0-bary1);
             }
             ab_ofs += ab[0] << 3;
             bc_ofs += bc[0] << 3;
@@ -390,7 +378,7 @@ void testcases() {
 int main(void) {
     ddr_init();
 
-    vec3_t camera_pos = {F(5), F(2), F(-5)};
+    vec3_t camera_pos = {F(5), F(2), F(-2)};
     matrix_t view_mat, proj_mat, VP;
     persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
 
@@ -414,25 +402,24 @@ int main(void) {
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(0, 1, 1, 1),
-            V4(0, 0, 1, 1)
+            V4(0, 2, 2, 1),
+            V4(0, 0, 2, 1)
         }, VP, fbid);
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(1, 1, 0, 1),
-            V4(0, 1, 1, 1)
+            V4(2, 2, 0, 1),
+            V4(0, 2, 2, 1)
         }, VP, fbid);
 
-        render_tri((triangle_t){
+        /*render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(1, 1, 0, 1),
-            V4(1, 0, 0, 1)
-        }, VP, fbid);
+            V4(2, 2, 0, 1),
+            V4(2, 0, 0, 1)
+        }, VP, fbid);*/
 
         REG32(HDMI_CTRL_FBID(0)) = fbid;
         fbid = (fbid + 1) % 4;
-
     }
 
     return 0;
