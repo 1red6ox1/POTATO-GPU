@@ -178,21 +178,6 @@ void rasterize_tri(
     gen_edgefn_coeffs(bc, x1, y1, x2, y2);
     gen_edgefn_coeffs(ca, x2, y2, x0, y0);
 
-    /* UV coordinates are fixed by vertex */
-    const fixed_t u0 = 0x00000000;
-    const fixed_t v0 = 0x00000000;
-    const fixed_t u1 = 0x00010000;
-    const fixed_t v1 = 0x00000000;
-    const fixed_t u2 = 0x00000000;
-    const fixed_t v2 = 0x00010000;
-
-    fixed_t udivw0 = fixed_div(u0, w0);
-    fixed_t vdivw0 = fixed_div(v0, w0);
-    fixed_t udivw1 = fixed_div(u1, w1);
-    fixed_t vdivw1 = fixed_div(v1, w1);
-    fixed_t udivw2 = fixed_div(u2, w2);
-    fixed_t vdivw2 = fixed_div(v2, w2);
-
     // 2**31 / (2**16 * wi) = 2**15 / wi
     fixed_t w_rcp0 = (0x80000000 / w0) << 1;
     fixed_t w_rcp1 = (0x80000000 / w1) << 1;
@@ -202,13 +187,13 @@ void rasterize_tri(
     affine_pcoeffs v_num;
     affine_pcoeffs uv_denom;
 
-    u_num[0] = bc[0] * udivw1;
-    u_num[1] = bc[1] * udivw1;
-    u_num[2] = bc[2] * udivw1;
+    u_num[0] = bc[0] * w_rcp1;
+    u_num[1] = bc[1] * w_rcp1;
+    u_num[2] = bc[2] * w_rcp1;
 
-    v_num[0] = ca[0] * vdivw2;
-    v_num[1] = ca[1] * vdivw2;
-    v_num[2] = ca[2] * vdivw2;
+    v_num[0] = ca[0] * w_rcp2;
+    v_num[1] = ca[1] * w_rcp2;
+    v_num[2] = ca[2] * w_rcp2;
 
     gen_attrib_coeffs(uv_denom, w_rcp0, w_rcp1, w_rcp2, ab, bc, ca);
 
@@ -402,17 +387,17 @@ int main(void) {
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(0, 2, 2, 1),
-            V4(0, 0, 2, 1)
+            V4(0, 1, 1, 1),
+            V4(0, 0, 1, 1)
         }, VP, fbid);
 
-        render_tri((triangle_t){
+        /*render_tri((triangle_t){
             V4(0, 0, 0, 1),
             V4(2, 2, 0, 1),
             V4(0, 2, 2, 1)
         }, VP, fbid);
 
-        /*render_tri((triangle_t){
+        render_tri((triangle_t){
             V4(0, 0, 0, 1),
             V4(2, 2, 0, 1),
             V4(2, 0, 0, 1)
