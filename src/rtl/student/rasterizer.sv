@@ -24,6 +24,8 @@ module rasterizer
     logic        pixblk_valid;
     logic        pixblk_ready;
 
+    logic        rasterizer_idle;
+
     rasterizer_ctrl_reg_top reg_top_i (
         .clk_i,
         .rst_ni,
@@ -35,6 +37,7 @@ module rasterizer
     );
 
     assign hw2reg.status.d = '0;
+    assign hw2reg.status.de = rasterizer_idle && !reg2hw.status.qe;
 
     rasterizer_core core_i (
         .clk_i,
@@ -66,7 +69,7 @@ module rasterizer
         .max_y_i(reg2hw.max_y.q),
 
         .start_i(reg2hw.status.qe),
-        .idle_o (hw2reg.status.de),
+        .idle_o (rasterizer_idle),
 
         .pixblk_mask_o (pixblk_mask),
         .pixblk_cy_o   (pixblk_cy),

@@ -702,7 +702,7 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/LOGN
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/LOG_REQS
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/clk_i
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/rst_ni
-add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[2]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i
+add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[3]} -expand {/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[2]} -expand {/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[1]} -expand {/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[0]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i
 add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o[2]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/dev_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/dev_i
@@ -712,6 +712,106 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/rptr
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/wptr
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/sel_host_h2d
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/sel_host_id
+add wave -noupdate -divider Rasterizer
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/clk_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/rst_ni
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/ab_topleft_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/bc_topleft_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/ca_topleft_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/un_topleft_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/vn_topleft_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/iw_topleft_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/ab_dx_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/ab_dy_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/bc_dx_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/bc_dy_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/ca_dx_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/ca_dy_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/un_dx_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/un_dy_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/vn_dx_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/vn_dy_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/iw_dx_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/iw_dy_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/min_x_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/min_y_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/max_x_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/max_y_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/start_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/idle_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pixblk_mask_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pixblk_cy_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pixblk_cx_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pixblk_valid_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pixblk_ready_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_x_q
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_x_d
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_x_min
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_x_max
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_y_q
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_y_d
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_y_min
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/seg_y_max
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/subpix_x_start
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/subpix_y_start
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/state_d
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/state_q
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ddx_ab
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ddx_bc
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ddx_ca
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ddx_un
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ddx_vn
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ddx_iw
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/row_base_ab
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/row_base_bc
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/row_base_ca
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/row_base_un
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/row_base_vn
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/row_base_iw
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_base_ab
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_base_bc
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_base_ca
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_base_un
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_base_vn
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_base_iw
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_ab
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_bc
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_ca
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_un
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_vn
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/cell_iw
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ab
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_bc
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_ca
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_un
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_vn
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/pix_iw
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/rasterizer_i/core_i/in_triangle
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/clk_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/rst_ni
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_mask_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_cy_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_cx_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_valid_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_ready_o
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/fbid_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/ddr_o
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/ddr_i
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_mask_q
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_cy_q
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_cx_q
+add wave -noupdate -expand -group Writer /system_tb/board/DUT/core_i/student_i/rasterizer_i/writer_i/pixblk_valid_q
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/clk_i
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/rst_ni
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/we
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/wd
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/de
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/d
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/qe
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/q
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/qs
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/wr_en
+add wave -noupdate -expand -group {status reg} /system_tb/board/DUT/core_i/student_i/rasterizer_i/reg_top_i/u_status/wr_data
 add wave -noupdate -divider CACHE
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/IDX_BITS
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/TAG_BITS
@@ -756,20 +856,8 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/data_
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/fe_modify_req
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/modify_clear
 add wave -noupdate -divider {DDR3 infrastructure}
-add wave -noupdate -expand /system_tb/board/DUT/tlul_ddr_i/blockmgr_req
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/blockmgr_rsp
 add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/req_i
 add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/rsp_o
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_stb
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_we
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_blk_addr
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_wdata
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_wmask
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_req_aux
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_stall
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_ack
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_rdata
-add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/ddr3if_rsp_aux
 add wave -noupdate -divider {Clock & Reset}
 add wave -noupdate /system_tb/board/DUT/sys_clk
 add wave -noupdate /system_tb/board/DUT/dbg_rst_n
@@ -807,19 +895,19 @@ add wave -noupdate -group {CPU Registers} -label {t4 (x29)} {/system_tb/board/DU
 add wave -noupdate -group {CPU Registers} -label {t5 (x30)} {/system_tb/board/DUT/core_i/cpu_i/u_core_default/core_i/id_stage_i/register_file_i/mem[30]}
 add wave -noupdate -group {CPU Registers} -label {t6 (x31)} {/system_tb/board/DUT/core_i/cpu_i/u_core_default/core_i/id_stage_i/register_file_i/mem[31]}
 add wave -noupdate /system_tb/board/DUT/core_i/cpu_i/u_core_default/core_i/id_stage_i/pc_id_i
-add wave -noupdate /system_tb/board/DUT/core_i/cpu_i/u_core_default/core_i/id_stage_i/instr_rdata_i
+add wave -noupdate -radix riscv_instr /system_tb/board/DUT/core_i/cpu_i/u_core_default/core_i/id_stage_i/instr_rdata_i
 add wave -noupdate -divider TL-UL
 add wave -noupdate /system_tb/board/DUT/core_i/tl_cpui_h2d
 add wave -noupdate /system_tb/board/DUT/core_i/tl_cpui_d2h
-add wave -noupdate /system_tb/board/DUT/core_i/tl_cpud_h2d
-add wave -noupdate /system_tb/board/DUT/core_i/tl_cpud_d2h
+add wave -noupdate -expand /system_tb/board/DUT/core_i/tl_cpud_h2d
+add wave -noupdate -expand /system_tb/board/DUT/core_i/tl_cpud_d2h
 add wave -noupdate /system_tb/board/DUT/core_i/tl_bram_main_h2d
 add wave -noupdate /system_tb/board/DUT/core_i/tl_bram_main_d2h
 add wave -noupdate -divider {Running Light}
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/rlight_i/led_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/rlight_i/cnt
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {863785239213 fs} 0}
+WaveRestoreCursors {{Cursor 1} {269474199219 fs} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 469
 configure wave -valuecolwidth 64
@@ -835,4 +923,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ns
 update
-WaveRestoreZoom {383373642501 fs} {396263165809 fs}
+WaveRestoreZoom {240509071879 fs} {286235854867 fs}

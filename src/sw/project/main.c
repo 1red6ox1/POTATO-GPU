@@ -109,6 +109,7 @@ typedef int64_t affine_pcoeffs[3];
 
 void gen_edgefn_coeffs(affine_pcoeffs dest, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
     dest[0] = y1 - y0;
+#define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
     dest[1] = x0 - x1;
     dest[2] = x1 * y0 - x0 * y1;
 }
@@ -166,6 +167,7 @@ void rasterize_tri(
     if (y2 > max_y) max_y = y2;
 
     min_x = (clamp(min_x, 0, 1919 << 3) & ~7) - 1;
+#define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
     max_x = clamp(max_x, 0, 1919 << 3) | 7;
     min_y = (clamp(min_y, 0, 1079 << 3) & ~7) - 1;
     max_y = clamp(max_y, 0, 1079 << 3) | 7;
@@ -206,7 +208,7 @@ void rasterize_tri(
     int64_t vn_startval = affine_peval(v_num,    min_x, min_y);
     int64_t iw_startval = affine_peval(uv_denom, min_x, min_y);
 
-    printf("START VALUES: %08x%08x/%08x%08x/%08x%08x/%08x%08x/%08x%08x/%08x%08x\n",
+    /*printf("START VALUES: %08x%08x/%08x%08x/%08x%08x/%08x%08x/%08x%08x/%08x%08x\n",
         (int32_t)(ab_startval >> 32), (int32_t)ab_startval,
         (int32_t)(bc_startval >> 32), (int32_t)bc_startval,
         (int32_t)(ca_startval >> 32), (int32_t)ca_startval,
@@ -223,7 +225,7 @@ void rasterize_tri(
     printf("  VN: %08x/%08x\n", (int32_t)v_num[0], (int32_t)v_num[1]);
     printf("  IW: %08x/%08x\n", (int32_t)uv_denom[0], (int32_t)uv_denom[1]);
 
-    printf("BBOX: %d/%d/%d/%d\n", min_x, min_y, max_x, max_y);
+    printf("BBOX: %d/%d/%d/%d\n", min_x, min_y, max_x, max_y);*/
 
     REG32(RASTERIZER_CTRL_FBID(0)) = fbid;
     REG32(RASTERIZER_CTRL_AB_TOPLEFT_HI(0)) = (int32_t)(ab_startval >> 32);
@@ -250,62 +252,14 @@ void rasterize_tri(
     REG32(RASTERIZER_CTRL_VN_DY(0)) = (int32_t)v_num[1];
     REG32(RASTERIZER_CTRL_IW_DX(0)) = (int32_t)uv_denom[0];
     REG32(RASTERIZER_CTRL_IW_DY(0)) = (int32_t)uv_denom[1];
+    REG32(RASTERIZER_CTRL_MIN_X(0)) = min_x;
+    REG32(RASTERIZER_CTRL_MIN_Y(0)) = min_y;
+    REG32(RASTERIZER_CTRL_MAX_X(0)) = max_x;
+    REG32(RASTERIZER_CTRL_MAX_Y(0)) = max_y;
 
     REG32(RASTERIZER_CTRL_STATUS(0)) = 1;
 
-    while (RASTERIZER_CTRL_STATUS(0) > 0);
-
-    /*int64_t ab_val, bc_val, ca_val;
-    int64_t ab_yofs, bc_yofs, ca_yofs;
-    int64_t ab_ofs, bc_ofs, ca_ofs; // shifted by 16
-    int64_t un_val, vn_val, iw_val;
-    int64_t un_yofs, vn_yofs, iw_yofs;
-    int64_t un_ofs, vn_ofs, iw_ofs;
-
-    int64_t bary0, bary1, bary2;
-
-    ab_yofs = 0;
-    bc_yofs = 0;
-    ca_yofs = 0;
-    un_yofs = 0;
-    vn_yofs = 0;
-    iw_yofs = 0;
-
-    for (int y = min_y; y <= max_y; y += 8) {
-        ab_ofs = ab_yofs;
-        bc_ofs = bc_yofs;
-        ca_ofs = ca_yofs;
-        un_ofs = un_yofs;
-        vn_ofs = vn_yofs;
-        iw_ofs = iw_yofs;
-
-        for (int x = min_x; x <= max_x; x += 8) {
-            ab_val = ab_startval + ab_ofs;
-            bc_val = bc_startval + bc_ofs;
-            ca_val = ca_startval + ca_ofs;
-            set_pixel(fbid, x>>3, y>>3, 255, 255, 255);
-            if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
-                un_val = un_startval + un_ofs;
-                vn_val = vn_startval + vn_ofs;
-                iw_val = iw_startval + iw_ofs;
-                bary0 = (un_val << 8) / iw_val;
-                bary1 = (vn_val << 8) / iw_val;
-                set_pixel(fbid, x >> 3, y >> 3, bary0, bary1, 255-bary0-bary1);
-            }
-            ab_ofs += ab[0] << 3;
-            bc_ofs += bc[0] << 3;
-            ca_ofs += ca[0] << 3;
-            un_ofs += u_num[0] << 3;
-            vn_ofs += v_num[0] << 3;
-            iw_ofs += uv_denom[0] << 3;
-        }
-        ab_yofs += ab[1] << 3;
-        bc_yofs += bc[1] << 3;
-        ca_yofs += ca[1] << 3;
-        un_yofs += u_num[1] << 3;
-        vn_yofs += v_num[1] << 3;
-        iw_yofs += uv_denom[1] << 3;
-    }*/
+    while (REG32(RASTERIZER_CTRL_STATUS(0)) > 0);
 }
 
 void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
@@ -322,7 +276,7 @@ void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
     rasterize_tri(fbid, x0, y0, clip_p0[3], x1, y1, clip_p1[3], x2, y2, clip_p2[3]);
 
     // Flush DDR cache
-    for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
+    //for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
 }
 
 #define F(x) ((x) << 16)
@@ -415,7 +369,7 @@ void testcases() {
 int main(void) {
     ddr_init();
 
-    vec3_t camera_pos = {F(5), F(2), F(-6)};
+    vec3_t camera_pos = {F(5), F(1), F(6)};
     matrix_t view_mat, proj_mat, VP;
     persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
 
@@ -428,14 +382,14 @@ int main(void) {
     REG32(HDMI_CTRL_FBID(0)) = 0;
 
     while (1) {
-        //cmd_clear_fb(fbid, 0, 0, 0);
+        cmd_clear_fb(fbid, 0, 0, 0);
 
         // Projection matrix stays the same, adjust view matrix and regenerate VP
         lookat_mat(view_mat, camera_pos, V3(0, 0, 0), V3(0, 1, 0));
         mat_mat_mul(VP, proj_mat, view_mat);
 
-        //camera_pos[2] = camera_pos[2] + 0x00002000;
-        //if (camera_pos[2] > (8 << 16)) camera_pos[2] = -5 << 16;
+        camera_pos[2] = camera_pos[2] + 0x00000100;
+        if (camera_pos[2] > (8 << 16)) camera_pos[2] = -5 << 16;
 
         /*render_tri((triangle_t){
             V4(0, 0, -1, 1),
@@ -445,17 +399,17 @@ int main(void) {
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(0, 1, 1, 1),
-            V4(0, 0, 1, 1)
+            V4(0, 2, 2, 1),
+            V4(0, 0, 2, 1)
         }, VP, fbid);
 
-        /*render_tri((triangle_t){
-            V4(0, 0, 1, 1),
-            V4(0, 1, 2, 1),
-            V4(0, 0, 2, 1)
-        }, VP, fbid);*/
+        render_tri((triangle_t){
+            V4(0, 0, 2, 1),
+            V4(0, 1, 3, 1),
+            V4(0, 0, 3, 1)
+        }, VP, fbid);
 
-        /*render_tri((triangle_t){
+        render_tri((triangle_t){
             V4(0, 0, 0, 1),
             V4(2, 2, 0, 1),
             V4(0, 2, 2, 1)
@@ -463,9 +417,9 @@ int main(void) {
 
         render_tri((triangle_t){
             V4(0, 0, 0, 1),
-            V4(2, 2, 0, 1),
-            V4(2, 0, 0, 1)
-        }, VP, fbid);*/
+            V4(2, 0, 0, 1),
+            V4(2, 2, 0, 1)
+        }, VP, fbid);
 
         REG32(HDMI_CTRL_FBID(0)) = fbid;
         fbid = (fbid + 1) % 4;
