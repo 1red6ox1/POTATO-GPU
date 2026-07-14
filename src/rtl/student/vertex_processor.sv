@@ -234,6 +234,7 @@ module vertex_processor #(
                         launch_vertex_q <= '0;
                         if (launch_triangle_q == last_stored_triangle_q) begin
                             launch_triangle_q <= '0;
+                            render_enabled_q <= 1'b0;
                         end else begin
                             launch_triangle_q <= launch_triangle_q + 1'b1;
                         end

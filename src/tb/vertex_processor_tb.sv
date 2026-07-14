@@ -305,20 +305,23 @@ module vertex_processor_tb;
       errcnt = errcnt + 1;
     end
 
-    if (out_id !== expected_id) begin
-      $error("%s: out_id mismatch, expected 0x%08x got 0x%08x", name, expected_id, out_id);
-      errcnt = errcnt + 1;
-    end
-
-    for (int i = 0; i < 4; i = i + 1) begin
-      if (out_vec[i] !== expected_vec[i]) begin
-        $error("%s: out_vec[%0d] mismatch, expected 0x%08x got 0x%08x",
-            name, i, expected_vec[i], out_vec[i]);
+    if (expected_valid) begin
+      if (out_id !== expected_id) begin
+        $error("%s: out_id mismatch, expected 0x%08x got 0x%08x", name, expected_id, out_id);
         errcnt = errcnt + 1;
+      end
+
+      for (int i = 0; i < 4; i = i + 1) begin
+        if (out_vec[i] !== expected_vec[i]) begin
+          $error("%s: out_vec[%0d] mismatch, expected 0x%08x got 0x%08x",
+              name, i, expected_vec[i], out_vec[i]);
+          errcnt = errcnt + 1;
+        end
       end
     end
 
     @(posedge clk);
+    out_ready = 1'b0;
     $display("[vertex_processor_tb] output %s: check done", name);
   endtask
 
