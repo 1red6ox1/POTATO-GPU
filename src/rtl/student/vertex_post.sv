@@ -161,7 +161,7 @@ module vertex_post #(
     end
   end
 
-  assign ready_o = (state_q == ST_IDLE) && rst_n;\
+  assign ready_o = (state_q == ST_IDLE) && rst_n;
   assign tri_id_o = tri_id_i;
 
   always_ff @(posedge clk) begin
