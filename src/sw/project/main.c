@@ -25,9 +25,14 @@
 #define PROJECT_RENDER_VERTEX_TRIANGLE 1
 #define PROJECT_RENDER_STATIC_CUBE     2
 #define PROJECT_RENDER_ANIMATED_CUBE   3
+#define PROJECT_RENDER_CUBE_FACE       4
 
 #ifndef PROJECT_RENDER_MODE
 #define PROJECT_RENDER_MODE PROJECT_RENDER_STATIC_CUBE
+#endif
+
+#ifndef PROJECT_CUBE_FACE_INDEX
+#define PROJECT_CUBE_FACE_INDEX 0
 #endif
 
 #define MAYBE_UNUSED __attribute__((unused))
@@ -182,6 +187,27 @@ static MAYBE_UNUSED void cmd_load_cube_vertices(void) {
     }
 }
 
+static MAYBE_UNUSED void cmd_load_cube_face_vertices(uint32_t face) {
+    uint32_t first_triangle = (face % 6u) * 2u;
+
+    for (uint32_t triangle = 0; triangle < 2; triangle++) {
+        for (uint32_t vertex = 0; vertex < 3; vertex++) {
+            const cube_vertex_t *source = &cube_vertices[
+                triangle_vertex_index(first_triangle + triangle, vertex)
+            ];
+
+            REG32(vertex_vec_addr(triangle, vertex, 0)) =
+                (uint32_t)int_to_q16(source->x);
+            REG32(vertex_vec_addr(triangle, vertex, 1)) =
+                (uint32_t)int_to_q16(source->y);
+            REG32(vertex_vec_addr(triangle, vertex, 2)) =
+                (uint32_t)int_to_q16(source->z);
+            REG32(vertex_vec_addr(triangle, vertex, 3)) =
+                (uint32_t)Q16_ONE;
+        }
+    }
+}
+
 static MAYBE_UNUSED void cmd_write_identity_matrix(void) {
     for (uint32_t row = 0; row < 4; row++) {
         for (uint32_t column = 0; column < 4; column++) {
@@ -263,11 +289,11 @@ static MAYBE_UNUSED void cmd_start_cube_hw(uint8_t phase_x, uint8_t phase_y) {
     cmd_start_vertex_hw(11);
 }
 
-static void triangle2d_write(uint32_t offset, uint32_t value) {
+static MAYBE_UNUSED void triangle2d_write(uint32_t offset, uint32_t value) {
     REG32(TRIANGLE2D_INPUT0_BASE_ADDR + offset) = value;
 }
 
-static void cmd_submit_direct_triangle(void) {
+static MAYBE_UNUSED void cmd_submit_direct_triangle(void) {
     while (REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_STATUS) & 1u);
 
     triangle2d_write(TRI2D_FBID_COLOR, 0);
@@ -325,6 +351,17 @@ int main(void) {
 
     cmd_load_cube_vertices();
     cmd_start_cube_hw(phase_x, phase_y);
+    wait_cycles(HW_RENDER_WAIT_CYCLES);
+    cmd_enable_hdmi(0);
+    while (1);
+
+#elif PROJECT_RENDER_MODE == PROJECT_RENDER_CUBE_FACE
+    uint8_t phase_x = INITIAL_PHASE_X;
+    uint8_t phase_y = INITIAL_PHASE_Y;
+
+    cmd_load_cube_face_vertices(PROJECT_CUBE_FACE_INDEX);
+    cmd_write_vertex_matrix(phase_x, phase_y);
+    cmd_start_vertex_hw(1);
     wait_cycles(HW_RENDER_WAIT_CYCLES);
     cmd_enable_hdmi(0);
     while (1);
