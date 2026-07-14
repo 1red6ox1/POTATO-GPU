@@ -7,8 +7,11 @@
 #include <rvlab.h>
 
 #include "graphics_math.h"
+#include "hdmi_utils.h"
 
 uint32_t last_frame;
+
+char fps_display[20];
 
 void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned char b) {
 
@@ -25,8 +28,6 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
 
     uint32_t finish = read_csr("mcycle");
 
-    //printf("Took %u cycles!\n", finish - start);
-
     if (finish - start < 100000) {
         printf("Frame clear unusually fast (%u cycles)!!\n", finish - start);
     }
@@ -34,7 +35,7 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
     uint32_t dt = finish - last_frame;
     uint32_t fps_x10 = 500000000 / dt;
 
-    //printf("\rFPS: %u.%u     ", fps_x10/10, fps_x10%10);
+    sprintf(fps_display, "FPS: %u.%u", fps_x10 / 10, fps_x10 % 10);
 
     last_frame = finish;
 }
@@ -48,28 +49,6 @@ void viewport_transform(vec4_t clip, int16_t* x, int16_t* y) {
     fixed_t screen_y = ((ndc8_y + (8<<16)) >> 1) * 1080;
     *x = screen_x >> 16;
     *y = (1080 << 3) - (screen_y >> 16);
-}
-
-void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
-    uint8_t cxo = x & 0x1F;
-    uint8_t cxb = x >> 5;
-    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
-    uint32_t addr_g = addr_r | (1 << 5);
-    uint32_t addr_b = addr_r | (2 << 5);
-    *((uint8_t*)addr_r) = r;
-    *((uint8_t*)addr_g) = g;
-    *((uint8_t*)addr_b) = b;
-}
-
-void get_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t *r, uint8_t *g, uint8_t *b) {
-    uint8_t cxo = x & 0x1F;
-    uint8_t cxb = x >> 5;
-    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
-    uint32_t addr_g = addr_r | (1 << 5);
-    uint32_t addr_b = addr_r | (2 << 5);
-    *r = *((uint8_t*)addr_r);
-    *g = *((uint8_t*)addr_g);
-    *b = *((uint8_t*)addr_b);
 }
 
 void render_line(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
@@ -381,6 +360,8 @@ int main(void) {
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
     REG32(HDMI_CTRL_FBID(0)) = 0;
 
+    fps_display[0] = '\0';
+
     while (1) {
         cmd_clear_fb(fbid, 0, 0, 0);
 
@@ -420,6 +401,10 @@ int main(void) {
             V4(2, 0, 0, 1),
             V4(2, 2, 0, 1)
         }, VP, fbid);
+
+        write_string(fbid, 0, 0, fps_display);
+
+        for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
 
         REG32(HDMI_CTRL_FBID(0)) = fbid;
         fbid = (fbid + 1) % 4;
