@@ -27,6 +27,7 @@ module vertex_post_to_triangle2d
 
   localparam int unsigned DEPTH_W = $clog2(FIFO_DEPTH + 1);
   localparam logic signed [DATA_WIDTH-1:0] ONE_Q16 = DATA_WIDTH'(1 <<< FRAC_WIDTH);
+  localparam logic signed [UVQ_WIDTH-1:0] ONE_Q24 = UVQ_WIDTH'(1 <<< UVQ_FRAC_WIDTH);
   localparam logic signed [2*COORD_WIDTH+2:0] AREA_ZERO = '0;
 
   triangle2d_t fifo_q [FIFO_DEPTH-1:0];
@@ -37,7 +38,6 @@ module vertex_post_to_triangle2d
   logic signed [COORD_WIDTH-1:0] x [2:0];
   logic signed [COORD_WIDTH-1:0] y [2:0];
   logic [DEPTH_WIDTH-1:0] z_depth [2:0];
-  logic signed [UVQ_WIDTH-1:0] q [2:0];
   logic signed [COORD_WIDTH:0] dx10;
   logic signed [COORD_WIDTH:0] dy20;
   logic signed [COORD_WIDTH:0] dy10;
@@ -68,28 +68,11 @@ module vertex_post_to_triangle2d
     end
   endfunction
 
-  function automatic logic signed [UVQ_WIDTH-1:0] q16_to_q24(
-      input logic signed [DATA_WIDTH-1:0] value);
-    logic signed [63:0] shifted;
-    begin
-      shifted = $signed({{(64-DATA_WIDTH){value[DATA_WIDTH-1]}}, value})
-          <<< (UVQ_FRAC_WIDTH - FRAC_WIDTH);
-      if (shifted > 64'sd2147483647) begin
-        q16_to_q24 = signed'({1'b0, {(UVQ_WIDTH-1){1'b1}}});
-      end else if (shifted < -64'sd2147483648) begin
-        q16_to_q24 = signed'({1'b1, {(UVQ_WIDTH-1){1'b0}}});
-      end else begin
-        q16_to_q24 = shifted[UVQ_WIDTH-1:0];
-      end
-    end
-  endfunction
-
   always_comb begin
     for (int i = 0; i < 3; i++) begin
       x[i] = COORD_WIDTH'($signed({1'b0, sx_i[i]}));
       y[i] = COORD_WIDTH'($signed({1'b0, sy_i[i]}));
       z_depth[i] = q16_to_depth(z_i[i]);
-      q[i] = q16_to_q24(inv_w_i[i]);
     end
 
     dx10 = $signed({x[1][COORD_WIDTH-1], x[1]})
@@ -111,21 +94,21 @@ module vertex_post_to_triangle2d
       az: z_depth[0],
       auq: '0,
       avq: '0,
-      aq: q[0],
+      aq: ONE_Q24,
 
       bx: x[1],
       by: y[1],
       bz: z_depth[1],
-      buq: q[1],
+      buq: ONE_Q24,
       bvq: '0,
-      bq: q[1],
+      bq: ONE_Q24,
 
       cx: x[2],
       cy: y[2],
       cz: z_depth[2],
       cuq: '0,
-      cvq: q[2],
-      cq: q[2]
+      cvq: ONE_Q24,
+      cq: ONE_Q24
     };
 
     if (area < AREA_ZERO) begin
@@ -133,15 +116,15 @@ module vertex_post_to_triangle2d
       triangle_i.by = y[2];
       triangle_i.bz = z_depth[2];
       triangle_i.buq = '0;
-      triangle_i.bvq = q[2];
-      triangle_i.bq = q[2];
+      triangle_i.bvq = ONE_Q24;
+      triangle_i.bq = ONE_Q24;
 
       triangle_i.cx = x[1];
       triangle_i.cy = y[1];
       triangle_i.cz = z_depth[1];
-      triangle_i.cuq = q[1];
+      triangle_i.cuq = ONE_Q24;
       triangle_i.cvq = '0;
-      triangle_i.cq = q[1];
+      triangle_i.cq = ONE_Q24;
     end
   end
 
