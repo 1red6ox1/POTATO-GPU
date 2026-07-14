@@ -1,5 +1,26 @@
 #include "vector_math.h"
 
+static uint64_t isqrt_u64(uint64_t value) {
+	uint64_t root = 0;
+	uint64_t bit = 1ull << 62;
+
+	while (bit > value) {
+		bit >>= 2;
+	}
+
+	while (bit != 0) {
+		if (value >= root + bit) {
+			value -= root + bit;
+			root = (root >> 1) + bit;
+		} else {
+			root >>= 1;
+		}
+		bit >>= 2;
+	}
+
+	return root;
+}
+
 void vec3_add(vec3_t dest, vec3_t a, vec3_t b) {
 	dest[0] = a[0] + b[0];
 	dest[1] = a[1] + b[1];
@@ -13,11 +34,12 @@ void vec3_sub(vec3_t dest, vec3_t a, vec3_t b) {
 }
 
 fixed_t vec3_abs(vec3_t in) {
-	fixed_t radicand = 0;
+	uint64_t radicand = 0;
 	for (int i = 0; i < 3; i++) {
-		radicand += fixed_mul(in[i], in[i]);
+		int64_t component = in[i];
+		radicand += (uint64_t)(component * component);
 	}
-	return fixed_sqrt(radicand);
+	return (fixed_t)isqrt_u64(radicand);
 }
 
 fixed_t vec3_dot(vec3_t vec1, vec3_t vec2) {
