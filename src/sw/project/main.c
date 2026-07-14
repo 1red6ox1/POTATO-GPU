@@ -16,6 +16,8 @@
 #define CAMERA_NEAR   10
 #define CAMERA_FAR    1200
 
+#define INITIAL_PHASE_X 16u
+#define INITIAL_PHASE_Y 24u
 #define DISPLAY_SWITCH_CYCLES 1000000u
 #define HW_RENDER_WAIT_CYCLES  4000000u
 
@@ -192,8 +194,8 @@ static void cmd_start_cube_hw(uint8_t phase_x, uint8_t phase_y) {
 }
 
 int main(void) {
-    uint8_t phase_x = 0;
-    uint8_t phase_y = 0;
+    uint8_t phase_x = INITIAL_PHASE_X;
+    uint8_t phase_y = INITIAL_PHASE_Y;
 
     if (ddr_init()) {
         while (1);
