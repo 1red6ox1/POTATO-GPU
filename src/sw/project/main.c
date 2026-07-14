@@ -21,6 +21,42 @@
 #define DISPLAY_SWITCH_CYCLES 1000000u
 #define HW_RENDER_WAIT_CYCLES  4000000u
 
+#define PROJECT_RENDER_DIRECT_TRIANGLE 0
+#define PROJECT_RENDER_VERTEX_TRIANGLE 1
+#define PROJECT_RENDER_STATIC_CUBE     2
+#define PROJECT_RENDER_ANIMATED_CUBE   3
+
+#ifndef PROJECT_RENDER_MODE
+#define PROJECT_RENDER_MODE PROJECT_RENDER_DIRECT_TRIANGLE
+#endif
+
+#define MAYBE_UNUSED __attribute__((unused))
+
+#define Q24_ONE 0x01000000
+
+#define TRI2D_STATUS      0x00u
+#define TRI2D_SUBMIT      0x04u
+#define TRI2D_FBID_COLOR  0x08u
+#define TRI2D_FBID_DEPTH  0x0cu
+#define TRI2D_AX          0x10u
+#define TRI2D_AY          0x14u
+#define TRI2D_AZ          0x18u
+#define TRI2D_AUQ         0x1cu
+#define TRI2D_AVQ         0x20u
+#define TRI2D_AQ          0x24u
+#define TRI2D_BX          0x28u
+#define TRI2D_BY          0x2cu
+#define TRI2D_BZ          0x30u
+#define TRI2D_BUQ         0x34u
+#define TRI2D_BVQ         0x38u
+#define TRI2D_BQ          0x3cu
+#define TRI2D_CX          0x40u
+#define TRI2D_CY          0x44u
+#define TRI2D_CZ          0x48u
+#define TRI2D_CUQ         0x4cu
+#define TRI2D_CVQ         0x50u
+#define TRI2D_CQ          0x54u
+
 typedef struct {
     int16_t x;
     int16_t y;
@@ -61,6 +97,13 @@ static void wait_cycles(uint32_t cycles) {
     uint32_t start = (uint32_t)read_csr("mcycle");
 
     while ((uint32_t)((uint32_t)read_csr("mcycle") - start) < cycles);
+}
+
+static void cmd_enable_hdmi(uint8_t fbid) {
+    REG32(HDMI_CTRL_FBID(0)) = fbid;
+    REG32(HDMI_CTRL_CTRL(0)) =
+        (1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
+        | (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
 }
 
 static void cmd_clear_buffers(
@@ -120,7 +163,7 @@ static uint8_t triangle_vertex_index(uint32_t triangle, uint32_t vertex) {
     return cube_triangles[triangle].c;
 }
 
-static void cmd_load_cube_vertices(void) {
+static MAYBE_UNUSED void cmd_load_cube_vertices(void) {
     for (uint32_t triangle = 0; triangle < 12; triangle++) {
         for (uint32_t vertex = 0; vertex < 3; vertex++) {
             const cube_vertex_t *source = &cube_vertices[
@@ -137,6 +180,34 @@ static void cmd_load_cube_vertices(void) {
                 (uint32_t)Q16_ONE;
         }
     }
+}
+
+static MAYBE_UNUSED void cmd_write_identity_matrix(void) {
+    for (uint32_t row = 0; row < 4; row++) {
+        for (uint32_t column = 0; column < 4; column++) {
+            REG32(VERTEX_CFG0_BASE_ADDR + ((row * 4 + column) << 2)) =
+                row == column ? (uint32_t)Q16_ONE : 0u;
+        }
+    }
+}
+
+static MAYBE_UNUSED void cmd_load_single_ndc_triangle(void) {
+    static const fixed_t verts[3][4] = {
+        {-Q16_ONE / 2, -Q16_ONE / 2, Q16_ONE / 2, Q16_ONE},
+        {0,             Q16_ONE / 2, Q16_ONE / 2, Q16_ONE},
+        { Q16_ONE / 2, -Q16_ONE / 2, Q16_ONE / 2, Q16_ONE},
+    };
+
+    for (uint32_t vertex = 0; vertex < 3; vertex++) {
+        for (uint32_t lane = 0; lane < 4; lane++) {
+            REG32(vertex_vec_addr(0, vertex, lane)) = (uint32_t)verts[vertex][lane];
+        }
+    }
+}
+
+static void cmd_start_vertex_hw(uint32_t last_triangle) {
+    REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = last_triangle;
+    REG32(VERTEX_PROCESSOR_START_RENDER(0)) = 1;
 }
 
 static void cmd_write_vertex_matrix(uint8_t phase_x, uint8_t phase_y) {
@@ -187,31 +258,85 @@ static void cmd_write_vertex_matrix(uint8_t phase_x, uint8_t phase_y) {
     }
 }
 
-static void cmd_start_cube_hw(uint8_t phase_x, uint8_t phase_y) {
+static MAYBE_UNUSED void cmd_start_cube_hw(uint8_t phase_x, uint8_t phase_y) {
     cmd_write_vertex_matrix(phase_x, phase_y);
-    REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = 11;
-    REG32(VERTEX_PROCESSOR_START_RENDER(0)) = 1;
+    cmd_start_vertex_hw(11);
+}
+
+static void triangle2d_write(uint32_t offset, uint32_t value) {
+    REG32(TRIANGLE2D_INPUT0_BASE_ADDR + offset) = value;
+}
+
+static void cmd_submit_direct_triangle(void) {
+    while (REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_STATUS) & 1u);
+
+    triangle2d_write(TRI2D_FBID_COLOR, 0);
+    triangle2d_write(TRI2D_FBID_DEPTH, 0);
+
+    triangle2d_write(TRI2D_AX, 700);
+    triangle2d_write(TRI2D_AY, 750);
+    triangle2d_write(TRI2D_AZ, 0x8000);
+    triangle2d_write(TRI2D_AUQ, 0);
+    triangle2d_write(TRI2D_AVQ, 0);
+    triangle2d_write(TRI2D_AQ, Q24_ONE);
+
+    triangle2d_write(TRI2D_BX, 960);
+    triangle2d_write(TRI2D_BY, 330);
+    triangle2d_write(TRI2D_BZ, 0x8000);
+    triangle2d_write(TRI2D_BUQ, 0);
+    triangle2d_write(TRI2D_BVQ, Q24_ONE);
+    triangle2d_write(TRI2D_BQ, Q24_ONE);
+
+    triangle2d_write(TRI2D_CX, 1220);
+    triangle2d_write(TRI2D_CY, 750);
+    triangle2d_write(TRI2D_CZ, 0x8000);
+    triangle2d_write(TRI2D_CUQ, Q24_ONE);
+    triangle2d_write(TRI2D_CVQ, 0);
+    triangle2d_write(TRI2D_CQ, Q24_ONE);
+
+    triangle2d_write(TRI2D_SUBMIT, 1);
+    while (REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_STATUS) & 1u);
 }
 
 int main(void) {
-    uint8_t phase_x = INITIAL_PHASE_X;
-    uint8_t phase_y = INITIAL_PHASE_Y;
-
     if (ddr_init()) {
         while (1);
     }
 
-    // The vertex-post adapter currently emits fixed framebuffer ID 0.
-    cmd_load_cube_vertices();
     cmd_clear_buffers(0, 2, 4, 12);
+
+#if PROJECT_RENDER_MODE == PROJECT_RENDER_DIRECT_TRIANGLE
+    cmd_submit_direct_triangle();
+    wait_cycles(HW_RENDER_WAIT_CYCLES);
+    cmd_enable_hdmi(0);
+    while (1);
+
+#elif PROJECT_RENDER_MODE == PROJECT_RENDER_VERTEX_TRIANGLE
+    cmd_load_single_ndc_triangle();
+    cmd_write_identity_matrix();
+    cmd_start_vertex_hw(0);
+    wait_cycles(HW_RENDER_WAIT_CYCLES);
+    cmd_enable_hdmi(0);
+    while (1);
+
+#elif PROJECT_RENDER_MODE == PROJECT_RENDER_STATIC_CUBE
+    uint8_t phase_x = INITIAL_PHASE_X;
+    uint8_t phase_y = INITIAL_PHASE_Y;
+
+    cmd_load_cube_vertices();
     cmd_start_cube_hw(phase_x, phase_y);
     wait_cycles(HW_RENDER_WAIT_CYCLES);
+    cmd_enable_hdmi(0);
+    while (1);
 
-    REG32(HDMI_CTRL_FBID(0)) = 0;
-    REG32(HDMI_CTRL_CTRL(0)) =
-        (1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
-        | (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
+#else
+    uint8_t phase_x = INITIAL_PHASE_X;
+    uint8_t phase_y = INITIAL_PHASE_Y;
 
+    cmd_load_cube_vertices();
+    cmd_start_cube_hw(phase_x, phase_y);
+    wait_cycles(HW_RENDER_WAIT_CYCLES);
+    cmd_enable_hdmi(0);
     while (1) {
         wait_cycles(DISPLAY_SWITCH_CYCLES);
 
@@ -222,4 +347,5 @@ int main(void) {
         cmd_start_cube_hw(phase_x, phase_y);
         wait_cycles(HW_RENDER_WAIT_CYCLES);
     }
+#endif
 }
