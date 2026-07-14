@@ -40,12 +40,6 @@ module rvlab_ddr_prefetch #(
      * All requests are acknowledged in the same cycle as the corresponding response exchange.
     */
 
-    ///////////////////////
-    //                   //
-    // STATE DECLARATION //
-    //                   //
-    ///////////////////////
-
     localparam int ADRW = $clog2(SIZE);
 
     typedef enum logic [1:0] {
@@ -65,8 +59,6 @@ module rvlab_ddr_prefetch #(
     logic [SIZE-1:0] invalid_mask;
     logic [SIZE-1:0] pending_mask;
     logic [SIZE-1:0] non_pending_mask;
-    logic            fe_req_pending;
-    logic            fe_miss;
 
     generate
         for (genvar i = 0; i < SIZE; i++) begin : gen_masks
@@ -74,20 +66,11 @@ module rvlab_ddr_prefetch #(
             assign addr_match_mask[i]  = entry_addrs[i] == fe_req_i.a_address;
             assign addr_le_mask[i]     = entry_addrs[i] <= fe_req_i.a_address;
             assign valid_mask[i]       = addr_match_mask[i] && entry_states[i] == Valid;
-            assign pending_mask[i]     = entry_states[i] == Pending;
+            assign pending_mask[i]     = addr_match_mask[i] && entry_states[i] == Pending;
             assign non_pending_mask[i] = entry_states[i] != Pending;
             assign invalid_mask[i]     = entry_states[i] == Invalid;
         end : gen_masks
     endgenerate
-
-    assign fe_req_pending = |(pending_mask & addr_match_mask);
-    assign fe_miss = fe_req_i.a_valid && ~|valid_mask && ~fe_req_pending;
-
-    ////////////////////////////////
-    //                            //
-    // ENTRY + ADDRESS MANAGEMENT //
-    //                            //
-    ////////////////////////////////
 
     logic [ADRW-1:0] allocate_addr;
     logic            can_allocate;
@@ -113,7 +96,7 @@ module rvlab_ddr_prefetch #(
         if (~rst_ni) begin
             next_prefetch_addr <= '0;
         end else begin
-            if (fe_miss && fe_req_i.a_opcode == Get) begin
+            if (fe_req_i.a_valid && ~|valid_mask && ~|pending_mask && fe_req_i.a_opcode == Get) begin
                 // Miss, update next prefetch address to (miss address) + 1
                 // Addresses are in blocks, thus increment by 1
                 next_prefetch_addr <= fe_req_i.a_address + 1;
@@ -125,12 +108,6 @@ module rvlab_ddr_prefetch #(
         end
     end
 
-    ////////////////////////
-    //                    //
-    // ENTRY UPDATE LOGIC //
-    //                    //
-    ////////////////////////
-
     // Frontend/Backend Beat exchange signals
     wire fe_req_xchg, fe_rsp_xchg;
     wire be_req_xchg, be_rsp_xchg;
@@ -138,8 +115,6 @@ module rvlab_ddr_prefetch #(
     assign fe_rsp_xchg = fe_rsp_o.d_valid && fe_req_i.d_ready;
     assign be_req_xchg = be_req_o.a_valid && be_rsp_i.a_ready;
     assign be_rsp_xchg = be_rsp_i.d_valid && be_req_o.d_ready;
-
-    /* States / Addresses */
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni) begin
@@ -155,7 +130,7 @@ module rvlab_ddr_prefetch #(
             end
 
             // MISSED FRONTEND GET REQUEST
-            if (fe_miss) begin
+            if (fe_req_i.a_valid && ~|valid_mask && ~|pending_mask) begin
                 // Incoming, non-prefetched request for which we want to allocate an entry
                 if (can_allocate && fe_req_i.a_opcode == Get && be_req_xchg) begin
                     entry_states[allocate_addr] <= Pending;
@@ -188,7 +163,16 @@ module rvlab_ddr_prefetch #(
         end
     end
 
-    /* Data */
+    /* Entry data memory interface */
+
+    logic [ADRW-1:0] valid_id;
+
+    always_comb begin
+        valid_id = '0;
+        for (int i = 0; i < SIZE; i++) begin
+            if (valid_mask[i]) valid_id = i;
+        end
+    end
 
     always_ff @(posedge clk_i) begin
         if (be_rsp_xchg && be_rsp_i.d_opcode == AccessAckData && entry_states[be_rsp_i.d_anc] != Valid) begin
@@ -200,20 +184,7 @@ module rvlab_ddr_prefetch #(
         end
     end
 
-    ///////////////////////
-    //                   //
-    // OUTPUT GENERATION //
-    //                   //
-    ///////////////////////
-
-    logic [ADRW-1:0] valid_id;
-
-    always_comb begin
-        valid_id = '0;
-        for (int i = 0; i < SIZE; i++) begin
-            if (valid_mask[i]) valid_id = i;
-        end
-    end
+    /* Output generation */
 
     always_comb begin
         fe_rsp_o = '{
@@ -259,7 +230,7 @@ module rvlab_ddr_prefetch #(
         if (can_allocate) begin
             if (fe_req_i.a_valid) begin
                 if (fe_req_i.a_opcode == Get) begin
-                    if (~|valid_mask && ~fe_req_pending) begin
+                    if (~|valid_mask && ~|pending_mask) begin
                         be_req_o.a_valid = '1;
                         is_prefetching = '0;
                     end

@@ -28,13 +28,12 @@ sw_dirs = [
     "rlight",
     "dma",
     "project",
-    "vertex_test",
 ]
 
 flow['libsys'] = Libsys(dependency_map={'reggen': 'reggen'})
 for sw_dir in sw_dirs:
     flow[f'sw_{sw_dir}'] = Program(sw_dir, dependency_map={
-        'libsys':'libsys', 'ref':'sw_project', 'reggen': 'reggen'})
+        'libsys':'libsys', 'ref':'sw_test_rvlab', 'reggen': 'reggen'})
 
 # Hardware
 # --------
@@ -46,7 +45,7 @@ flow['ddr3_model'] = Ddr3Model()
 flow['srcs'] = Sources(dependency_map={
     'xbar': 'xbar',
     'reggen': 'reggen',
-    'swinit': 'sw_project',
+    'swinit': 'sw_test_rvlab',
     'ddr3_model': 'ddr3_model',
 })
 
@@ -59,10 +58,7 @@ flow['rvlab_fpga_top'] = RvlabFpgaTop(dependency_map={'srcs':'srcs'})
 module_tbs = [
     "student_rlight_tb",
     "student_tlul_mux_tb",
-    "matmul_tb",
-    "hdmi_tb",
-    "dpram_tb",
-    "vertex_processor_tb",
+    "hdmi_tb"
 ]
 
 for name in module_tbs:

@@ -1,0 +1,166 @@
+{
+	name: "triangle2d_input"
+	clock_primary: "sys_clk"
+	bus_device: "tlul"
+	regwidth: "32"
+	registers: [
+		{
+			name: "status"
+			desc: "Triangle input and rasterizer status"
+			swaccess: "ro"
+			hwaccess: "hrw"
+			fields: [
+				{bits: "0", name: "valid", desc: "Triangle input data is valid"}
+			]
+		}
+		{
+			name: "submit"
+			desc: "Write 1 after updating vertex data to submit the triangle"
+			swaccess: "wo"
+			hwaccess: "hro"
+			hwext: "true"
+			hwqe: "true"
+			fields: [{bits: "0", name: "valid", desc: "Submit triangle"}]
+		}
+		{
+			name: "fbid_color"
+			desc: "Color framebuffer ID"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "1:0", name: "val", desc: "Framebuffer ID"}]
+		}
+		{
+			name: "fbid_depth"
+			desc: "Depth framebuffer ID"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "1:0", name: "val", desc: "Depth framebuffer ID"}]
+		}
+		{
+			name: "ax"
+			desc: "Triangle vertex A X coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Signed 16-bit value"}]
+		}
+		{
+			name: "ay"
+			desc: "Triangle vertex A Y coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Signed 16-bit value"}]
+		}
+		{
+			name: "az"
+			desc: "Triangle vertex A Z coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Unsigned 16-bit value"}]
+		}
+		{
+			name: "auq"
+			desc: "Triangle vertex A U over W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "avq"
+			desc: "Triangle vertex A V over W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "aq"
+			desc: "Triangle vertex A reciprocal W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "bx"
+			desc: "Triangle vertex B X coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Signed 16-bit value"}]
+		}
+		{
+			name: "by"
+			desc: "Triangle vertex B Y coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Signed 16-bit value"}]
+		}
+		{
+			name: "bz"
+			desc: "Triangle vertex B Z coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Unsigned 16-bit value"}]
+		}
+		{
+			name: "buq"
+			desc: "Triangle vertex B U over W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "bvq"
+			desc: "Triangle vertex B V over W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "bq"
+			desc: "Triangle vertex B reciprocal W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "cx"
+			desc: "Triangle vertex C X coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Signed 16-bit value"}]
+		}
+		{
+			name: "cy"
+			desc: "Triangle vertex C Y coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Signed 16-bit value"}]
+		}
+		{
+			name: "cz"
+			desc: "Triangle vertex C Z coordinate"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "15:0", name: "val", desc: "Unsigned 16-bit value"}]
+		}
+		{
+			name: "cuq"
+			desc: "Triangle vertex C U over W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "cvq"
+			desc: "Triangle vertex C V over W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+		{
+			name: "cq"
+			desc: "Triangle vertex C reciprocal W in Q8.24"
+			swaccess: "rw"
+			hwaccess: "hro"
+			fields: [{bits: "31:0", name: "val", desc: "Signed 32-bit value"}]
+		}
+	]
+}
