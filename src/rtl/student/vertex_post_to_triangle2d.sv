@@ -180,9 +180,40 @@ module vertex_post_to_triangle2d
   end
 
 `ifndef SYNTHESIS
+  logic stalled_q;
+  logic [10:0] stalled_sx_q [2:0];
+  logic [10:0] stalled_sy_q [2:0];
+  logic signed [DATA_WIDTH-1:0] stalled_z_q [2:0];
+  logic signed [DATA_WIDTH-1:0] stalled_inv_w_q [2:0];
+
   always_ff @(posedge clk_i) begin
-    if (rst_ni && in_valid_i && !in_ready_o) begin
-      $error("vertex_post_to_triangle2d dropped a triangle because its FIFO is full");
+    if (!rst_ni) begin
+      stalled_q <= 1'b0;
+    end else begin
+      if (stalled_q && !in_ready_o) begin
+        if (!in_valid_i) begin
+          $error("vertex_post_to_triangle2d input valid dropped before ready");
+        end
+        for (int i = 0; i < 3; i++) begin
+          if (in_valid_i
+              && (sx_i[i] !== stalled_sx_q[i]
+                  || sy_i[i] !== stalled_sy_q[i]
+                  || z_i[i] !== stalled_z_q[i]
+                  || inv_w_i[i] !== stalled_inv_w_q[i])) begin
+            $error("vertex_post_to_triangle2d input changed while stalled");
+          end
+        end
+      end
+
+      stalled_q <= in_valid_i && !in_ready_o;
+      if (in_valid_i && !in_ready_o) begin
+        for (int i = 0; i < 3; i++) begin
+          stalled_sx_q[i] <= sx_i[i];
+          stalled_sy_q[i] <= sy_i[i];
+          stalled_z_q[i] <= z_i[i];
+          stalled_inv_w_q[i] <= inv_w_i[i];
+        end
+      end
     end
   end
 `endif

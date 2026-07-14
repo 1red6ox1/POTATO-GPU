@@ -64,6 +64,7 @@ module_tbs = [
     "vertex_processor_tb",
     "vertex_triangle_collector_tb",
     "vertex_post_tb",
+    "vertex_pipeline_integration_tb",
 ]
 
 for name in module_tbs:

@@ -309,7 +309,7 @@ module student (
     .in_vec_i   (vertex_out_vec),
 
     .out_valid_o(vertex_post_in_valid),
-    .out_ready_i(vertex_post_ready && vertex_post_to_triangle2d_ready),
+    .out_ready_i(vertex_post_ready),
     .out_id_o   (vertex_post_in_id),
     .out_x_o    (vertex_post_x),
     .out_y_o    (vertex_post_y),
@@ -326,11 +326,14 @@ module student (
     .y_i      (vertex_post_y),
     .z_i      (vertex_post_z),
     .w_i      (vertex_post_w),
+    .tri_id_i ({1'b0, vertex_post_in_id}),
     .out_valid(vertex_post_out_valid),
+    .out_ready_i(vertex_post_to_triangle2d_ready),
     .sx_o     (vertex_post_sx),
     .sy_o     (vertex_post_sy),
     .z_o      (vertex_post_ndc_z),
-    .inv_w_o  (vertex_post_inv_w)
+    .inv_w_o  (vertex_post_inv_w),
+    .tri_id_o ()
   );
 
   vertex_post_to_triangle2d #(
