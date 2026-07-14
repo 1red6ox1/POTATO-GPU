@@ -18,6 +18,7 @@ module frameclear_dma #(
 	import frameclear_dma_reg_pkg::*;
 
 	localparam int W_CHUNKS = FRAMEW / 32;
+	localparam int D_CHUNKS = FRAMEW / 16;
 
 	frameclear_dma_reg2hw_t reg2hw;
 	frameclear_dma_hw2reg_t hw2reg;
@@ -39,23 +40,18 @@ module frameclear_dma #(
 	logic        clear_mode;
 
 	logic [ 7:0] clear_r, clear_g, clear_b;
-	logic [15:0] clear_depth;
 
 	assign clear_r     = clear_color[23:16];
 	assign clear_g     = clear_color[15: 8];
 	assign clear_b     = clear_color[ 7: 0];
-	assign clear_depth = clear_color[15: 0];
 
-	logic [255:0] tiled_r, tiled_g, tiled_b, tiled_depth;
+	logic [255:0] tiled_r, tiled_g, tiled_b;
 	generate
 		for (genvar i = 0; i < 32; i++) begin : gen_tiled_colors
 			assign tiled_r[8*i+:8] = clear_r;
 			assign tiled_g[8*i+:8] = clear_g;
 			assign tiled_b[8*i+:8] = clear_b;
 		end : gen_tiled_colors
-		for (genvar i = 0; i < 16; i++) begin : gen_tiled_depth
-			assign tiled_depth[16*i+:16] = clear_depth;
-		end : gen_tiled_depth
 	endgenerate
 
 	always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -78,7 +74,7 @@ module frameclear_dma #(
 		BLUE  = 2'b10
 	} state_e;
 
-	logic [ 5:0] cx_q;
+	logic [ 6:0] cx_q;
 	logic [10:0] cy_q;
 
 	state_e state_q;
@@ -90,18 +86,29 @@ module frameclear_dma #(
 			state_q <= RED;
 		end else begin
 			if (ddr_o.a_valid && ddr_i.a_ready) begin
-				unique case (state_q)
-					RED  : state_q <= GREEN;
-					GREEN: state_q <= BLUE;
-					BLUE : state_q <= RED;
-				endcase
-				if (state_q == BLUE) begin
+				if (clear_mode) begin
 					cx_q <= cx_q + 1;
-					if (cx_q == W_CHUNKS - 1) begin
+					if (cx_q == D_CHUNKS - 1) begin
 						cx_q <= '0;
 						cy_q <= cy_q + 1;
 						if (cy_q == FRAMEH - 1) begin
 							cy_q <= '0;
+						end
+					end
+				end else begin
+					unique case (state_q)
+						RED    : state_q <= GREEN;
+						GREEN  : state_q <= BLUE;
+						BLUE   : state_q <= RED;
+					endcase
+					if (state_q == BLUE) begin
+						cx_q <= cx_q + 1;
+						if (cx_q == W_CHUNKS - 1) begin
+							cx_q <= '0;
+							cy_q <= cy_q + 1;
+							if (cy_q == FRAMEH - 1) begin
+								cy_q <= '0;
+							end
 						end
 					end
 				end
@@ -113,20 +120,37 @@ module frameclear_dma #(
 		ddr_o = '{
 			a_valid: reg2hw.status.q && ~reg2hw.status.qe,
 			a_opcode: PutFullData,
-			a_address: {3'h0, clear_fbid, cy_q, cx_q, 2'(state_q)},
+			a_address: '0,
 			a_mask: 32'hFFFFFFFF,
 			d_ready: '1,
 			default: '0
 		};
-		unique case (state_q)
-			RED  : ddr_o.a_data = tiled_r;
-			GREEN: ddr_o.a_data = tiled_g;
-			BLUE : ddr_o.a_data = tiled_b;
-		endcase
+		if (clear_mode) begin
+			ddr_o.a_address = {4'h1, clear_fbid, cy_q, cx_q};
+			ddr_o.a_data = '0;
+		end else begin
+			ddr_o.a_address = {3'h0, clear_fbid, cy_q, cx_q[5:0], 2'(state_q)};
+			unique case (state_q)
+				RED  : ddr_o.a_data = tiled_r;
+				GREEN: ddr_o.a_data = tiled_g;
+				BLUE : ddr_o.a_data = tiled_b;
+			endcase
+		end
 	end
 
 	assign hw2reg.status.d = '0;
-	assign hw2reg.status.de = ddr_o.a_valid && ddr_i.a_ready && state_q == BLUE
-							  && cx_q == W_CHUNKS - 1 && cy_q == FRAMEH - 1;
+	assign hw2reg.status.de = ddr_o.a_valid && ddr_i.a_ready && cy_q == FRAMEH - 1
+								  && ((!clear_mode && state_q == BLUE && cx_q == W_CHUNKS - 1)
+									  || (clear_mode && cx_q == D_CHUNKS - 1));
+
+`ifndef SYNTHESIS
+	always @(posedge clk_i) begin
+		if (reg2hw.status.qe) begin
+			$display("frameclear_cmd,%0t,fbid,%0d,mode,%0d,color,%h",
+			         $time, reg2hw.fbid.q, reg2hw.mode.q,
+			         reg2hw.clear_color.q);
+		end
+	end
+`endif
 
 endmodule

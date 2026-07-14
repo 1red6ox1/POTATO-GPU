@@ -23,11 +23,21 @@ class Sources(Block):
 
         design_srcs_pkg = []
         design_srcs_pkg += [self.src_dir / "rtl/inc/prim_assert.sv"]
-        for d in ["rvlab_fpga", "prim", "cv32e40p", "tlul", "rv_dm", "ddr3"]:
+        for d in ["rvlab_fpga", "prim", "cv32e40p", "tlul", "rv_dm", "ddr3", "rasterizer"]:
             design_srcs_pkg += [x for x in self.src_dir.glob(f"rtl/{d}/pkg/*.sv")]
         design_srcs = []
         design_srcs += [x for x in self.src_dir.glob("rtl/*/*.sv")]
         design_srcs += [x for x in self.src_dir.glob("rtl/*/*.v")]
+
+        # Rasterizer modules may be grouped in subdirectories such as
+        # rtl/rasterizer/fifos.  Package files stay in design_srcs_pkg above
+        # so they are compiled first and are not added a second time here.
+        rasterizer_dir = self.src_dir / "rtl/rasterizer"
+        design_srcs += [
+            x for x in rasterizer_dir.rglob("*.sv")
+            if len(x.relative_to(rasterizer_dir).parts) > 1
+            and "pkg" not in x.relative_to(rasterizer_dir).parts
+        ]
 
         r.tb_srcs = [x for x in self.src_dir.glob("tb/*.sv")]
         r.tb_srcs += [vivado.vivado_dir() / "data/verilog/src/glbl.v"]
