@@ -4,36 +4,25 @@
 
 #include <stdint.h>
 #include <rvlab.h>
+#include "graphics_math.h"
 
 #define SCREEN_WIDTH  1920
 #define SCREEN_HEIGHT 1080
 
-#define Q_ONE   (1u << 24)
-#define Q_HALF  (Q_ONE >> 1)
-#define Q_THIRD (Q_ONE / 3)
+#define Q16_ONE 65536
 
 #define CUBE_SIZE     150
 #define CAMERA_Z      760
-#define FOCAL_LENGTH  900
-#define DEPTH_SCALE   48
+#define CAMERA_NEAR   10
+#define CAMERA_FAR    1200
 
 #define DISPLAY_SWITCH_CYCLES 1000000u
-
-typedef struct {
-    int16_t x;
-    int16_t y;
-    uint16_t z;
-    uint32_t uq;
-    uint32_t vq;
-    uint32_t q;
-} screen_vertex_t;
+#define HW_RENDER_WAIT_CYCLES  4000000u
 
 typedef struct {
     int16_t x;
     int16_t y;
     int16_t z;
-    uint32_t u;
-    uint32_t v;
 } cube_vertex_t;
 
 typedef struct {
@@ -42,17 +31,17 @@ typedef struct {
     uint8_t c;
 } triangle_index_t;
 
-// u and v are barycentric color coordinates. The hardware produces
-// red = 1-u-v, green = v, blue = u.
+// The vertex-post adapter currently assigns barycentric debug colors after
+// projection, so the CPU only has to provide object-space positions here.
 static const cube_vertex_t cube_vertices[8] = {
-    {-CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE, 0,       0      },
-    { CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE, Q_ONE,   0      },
-    { CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE, Q_HALF,  Q_HALF },
-    {-CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE, 0,       Q_ONE  },
-    {-CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE, Q_HALF,  0      },
-    { CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE, Q_THIRD, Q_THIRD},
-    { CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE, 0,       Q_HALF },
-    {-CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE, Q_HALF,  Q_HALF },
+    {-CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE},
+    { CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE},
+    { CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE},
+    {-CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE},
+    {-CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE},
+    { CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE},
+    { CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE},
+    {-CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE},
 };
 
 // Two triangles for every cube face. Both front and back faces are submitted;
@@ -93,66 +82,6 @@ static void cmd_clear_buffers(
     while (REG32(FRAMECLEAR_DMA_STATUS(0)));
 }
 
-static void cmd_submit_triangle(
-    uint8_t color_buffer,
-    uint8_t depth_buffer,
-    screen_vertex_t a,
-    screen_vertex_t b,
-    screen_vertex_t c
-) {
-    while (REG32(TRIANGLE2D_INPUT_STATUS(0))
-           & TRIANGLE2D_INPUT_STATUS_VALID_MASK);
-
-    REG32(TRIANGLE2D_INPUT_FBID_COLOR(0)) = color_buffer;
-    REG32(TRIANGLE2D_INPUT_FBID_DEPTH(0)) = depth_buffer;
-
-    REG32(TRIANGLE2D_INPUT_AX(0)) = (uint16_t)a.x;
-    REG32(TRIANGLE2D_INPUT_AY(0)) = (uint16_t)a.y;
-    REG32(TRIANGLE2D_INPUT_AZ(0)) = a.z;
-    REG32(TRIANGLE2D_INPUT_AUQ(0)) = a.uq;
-    REG32(TRIANGLE2D_INPUT_AVQ(0)) = a.vq;
-    REG32(TRIANGLE2D_INPUT_AQ(0)) = a.q;
-
-    REG32(TRIANGLE2D_INPUT_BX(0)) = (uint16_t)b.x;
-    REG32(TRIANGLE2D_INPUT_BY(0)) = (uint16_t)b.y;
-    REG32(TRIANGLE2D_INPUT_BZ(0)) = b.z;
-    REG32(TRIANGLE2D_INPUT_BUQ(0)) = b.uq;
-    REG32(TRIANGLE2D_INPUT_BVQ(0)) = b.vq;
-    REG32(TRIANGLE2D_INPUT_BQ(0)) = b.q;
-
-    REG32(TRIANGLE2D_INPUT_CX(0)) = (uint16_t)c.x;
-    REG32(TRIANGLE2D_INPUT_CY(0)) = (uint16_t)c.y;
-    REG32(TRIANGLE2D_INPUT_CZ(0)) = c.z;
-    REG32(TRIANGLE2D_INPUT_CUQ(0)) = c.uq;
-    REG32(TRIANGLE2D_INPUT_CVQ(0)) = c.vq;
-    REG32(TRIANGLE2D_INPUT_CQ(0)) = c.q;
-
-    REG32(TRIANGLE2D_INPUT_SUBMIT(0)) = 1;
-}
-
-static void cmd_submit_winding_corrected(
-    uint8_t color_buffer,
-    uint8_t depth_buffer,
-    screen_vertex_t a,
-    screen_vertex_t b,
-    screen_vertex_t c
-) {
-    int32_t area = (int32_t)(b.x - a.x) * (int32_t)(c.y - a.y)
-                 - (int32_t)(b.y - a.y) * (int32_t)(c.x - a.x);
-
-    if (area == 0) {
-        return;
-    }
-
-    if (area < 0) {
-        screen_vertex_t temporary = b;
-        b = c;
-        c = temporary;
-    }
-
-    cmd_submit_triangle(color_buffer, depth_buffer, a, b, c);
-}
-
 // Smooth integer sine approximation. Input phase 0..255 represents 0..2*pi;
 // output is signed Q2.14. This avoids requiring libm on the bare-metal CPU.
 static int32_t sin_q14(uint8_t phase) {
@@ -167,78 +96,102 @@ static int32_t cos_q14(uint8_t phase) {
     return sin_q14((uint8_t)(phase + 64u));
 }
 
-static screen_vertex_t rotate_and_project(
-    const cube_vertex_t *vertex,
-    int32_t sin_x,
-    int32_t cos_x,
-    int32_t sin_y,
-    int32_t cos_y
-) {
-    int32_t x_yaw = ((int32_t)vertex->x * cos_y
-                   + (int32_t)vertex->z * sin_y) >> 14;
-    int32_t z_yaw = (-(int32_t)vertex->x * sin_y
-                   + (int32_t)vertex->z * cos_y) >> 14;
-    int32_t y_pitch = ((int32_t)vertex->y * cos_x
-                     - z_yaw * sin_x) >> 14;
-    int32_t z_pitch = ((int32_t)vertex->y * sin_x
-                     + z_yaw * cos_x) >> 14;
-    int32_t camera_z = z_pitch + CAMERA_Z;
-    int32_t screen_x = SCREEN_WIDTH / 2 + x_yaw * FOCAL_LENGTH / camera_z;
-    int32_t screen_y = SCREEN_HEIGHT / 2 - y_pitch * FOCAL_LENGTH / camera_z;
-    int32_t depth = 65535 - camera_z * DEPTH_SCALE;
-    uint32_t q = (uint32_t)(((uint64_t)Q_ONE * CAMERA_Z)
-                           / (uint32_t)camera_z);
-    screen_vertex_t result;
-
-    if (screen_x < 0) screen_x = 0;
-    if (screen_x >= SCREEN_WIDTH) screen_x = SCREEN_WIDTH - 1;
-    if (screen_y < 0) screen_y = 0;
-    if (screen_y >= SCREEN_HEIGHT) screen_y = SCREEN_HEIGHT - 1;
-    if (depth < 1) depth = 1;
-    if (depth > 65535) depth = 65535;
-
-    result.x = (int16_t)screen_x;
-    result.y = (int16_t)screen_y;
-    result.z = (uint16_t)depth;
-    result.q = q;
-
-    // uq=u*q and vq=v*q make the hardware interpolation perspective-correct.
-    result.uq = (uint32_t)(((uint64_t)vertex->u * q) >> 24);
-    result.vq = (uint32_t)(((uint64_t)vertex->v * q) >> 24);
-
-    return result;
+static fixed_t int_to_q16(int32_t value) {
+    return value * Q16_ONE;
 }
 
-static void cmd_draw_cube(
-    uint8_t color_buffer,
-    uint8_t depth_buffer,
-    uint8_t phase_x,
-    uint8_t phase_y
+static fixed_t scaled_q16_from_q14(int32_t value_q14, int32_t scale) {
+    return (fixed_t)(((int64_t)value_q14 * scale * Q16_ONE) >> 14);
+}
+
+static uint32_t vertex_vec_addr(
+    uint32_t triangle,
+    uint32_t vertex,
+    uint32_t lane
 ) {
-    screen_vertex_t projected[8];
-    int32_t sin_x = sin_q14(phase_x);
-    int32_t cos_x = cos_q14(phase_x);
-    int32_t sin_y = sin_q14(phase_y);
-    int32_t cos_y = cos_q14(phase_y);
+    return VERTEX_DATA0_BASE_ADDR | (triangle << 6) | (vertex << 4) | (lane << 2);
+}
 
-    for (uint32_t i = 0; i < 8; i++) {
-        projected[i] = rotate_and_project(&cube_vertices[i],
-                                          sin_x, cos_x, sin_y, cos_y);
-    }
+static uint8_t triangle_vertex_index(uint32_t triangle, uint32_t vertex) {
+    if (vertex == 0) return cube_triangles[triangle].a;
+    if (vertex == 1) return cube_triangles[triangle].b;
+    return cube_triangles[triangle].c;
+}
 
-    for (uint32_t i = 0; i < 12; i++) {
-        cmd_submit_winding_corrected(
-            color_buffer,
-            depth_buffer,
-            projected[cube_triangles[i].a],
-            projected[cube_triangles[i].b],
-            projected[cube_triangles[i].c]
-        );
+static void cmd_load_cube_vertices(void) {
+    for (uint32_t triangle = 0; triangle < 12; triangle++) {
+        for (uint32_t vertex = 0; vertex < 3; vertex++) {
+            const cube_vertex_t *source = &cube_vertices[
+                triangle_vertex_index(triangle, vertex)
+            ];
+
+            REG32(vertex_vec_addr(triangle, vertex, 0)) =
+                (uint32_t)int_to_q16(source->x);
+            REG32(vertex_vec_addr(triangle, vertex, 1)) =
+                (uint32_t)int_to_q16(source->y);
+            REG32(vertex_vec_addr(triangle, vertex, 2)) =
+                (uint32_t)int_to_q16(source->z);
+            REG32(vertex_vec_addr(triangle, vertex, 3)) =
+                (uint32_t)Q16_ONE;
+        }
     }
+}
+
+static void cmd_write_vertex_matrix(uint8_t phase_x, uint8_t phase_y) {
+    vec3_t eye = {
+        scaled_q16_from_q14(sin_q14(phase_y), CAMERA_Z),
+        scaled_q16_from_q14(sin_q14(phase_x), CUBE_SIZE),
+        scaled_q16_from_q14(cos_q14(phase_y), CAMERA_Z),
+    };
+    vec3_t center = {
+        int_to_q16(0),
+        int_to_q16(0),
+        int_to_q16(0),
+    };
+    vec3_t up = {
+        int_to_q16(0),
+        int_to_q16(1),
+        int_to_q16(0),
+    };
+    matrix_t view;
+    matrix_t projection;
+    matrix_t view_projection;
+    fixed_t near = int_to_q16(CAMERA_NEAR);
+    fixed_t far = int_to_q16(CAMERA_FAR);
+    fixed_t far_minus_near = far - near;
+
+    lookat_mat(view, eye, center, up);
+    persp_proj_mat(
+        projection,
+        60,
+        fixed_div(int_to_q16(SCREEN_HEIGHT), int_to_q16(SCREEN_WIDTH)),
+        far,
+        near
+    );
+
+    // The rasterizer depth test treats larger depth values as closer, while
+    // persp_proj_mat creates the usual near-low/far-high OpenGL Z mapping.
+    // Keep its X/Y/W projection and replace Z with a reversed-depth mapping.
+    projection[2][2] = fixed_div(near, far_minus_near);
+    projection[2][3] = fixed_div(fixed_mul(far, near), far_minus_near);
+
+    mat_mat_mul(view_projection, projection, view);
+
+    for (uint32_t row = 0; row < 4; row++) {
+        for (uint32_t column = 0; column < 4; column++) {
+            REG32(VERTEX_CFG0_BASE_ADDR + ((row * 4 + column) << 2)) =
+                (uint32_t)view_projection[row][column];
+        }
+    }
+}
+
+static void cmd_start_cube_hw(uint8_t phase_x, uint8_t phase_y) {
+    cmd_write_vertex_matrix(phase_x, phase_y);
+    REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = 11;
+    REG32(VERTEX_PROCESSOR_START_RENDER(0)) = 1;
 }
 
 int main(void) {
-    uint8_t visible_buffer = 0;
     uint8_t phase_x = 0;
     uint8_t phase_y = 0;
 
@@ -246,32 +199,25 @@ int main(void) {
         while (1);
     }
 
-    // Initialize both color/depth buffer pairs before enabling the display.
+    // The vertex-post adapter currently emits fixed framebuffer ID 0.
+    cmd_load_cube_vertices();
     cmd_clear_buffers(0, 2, 4, 12);
-    cmd_clear_buffers(1, 2, 4, 12);
+    cmd_start_cube_hw(phase_x, phase_y);
+    wait_cycles(HW_RENDER_WAIT_CYCLES);
 
-    REG32(HDMI_CTRL_FBID(0)) = visible_buffer;
+    REG32(HDMI_CTRL_FBID(0)) = 0;
     REG32(HDMI_CTRL_CTRL(0)) =
         (1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
         | (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
 
     while (1) {
-        uint8_t draw_buffer = visible_buffer ^ 1u;
-
-        cmd_clear_buffers(draw_buffer, 2, 4, 12);
-        cmd_draw_cube(draw_buffer, draw_buffer, phase_x, phase_y);
-
-        // Status remains set until the complete rasterizer pipeline is empty
-        // and every DDR write response has arrived.
-        while (REG32(TRIANGLE2D_INPUT_STATUS(0))
-               & TRIANGLE2D_INPUT_STATUS_VALID_MASK);
-
-        // HDMI_CTRL_FBID selects the framebuffer at the next video frame.
-        REG32(HDMI_CTRL_FBID(0)) = draw_buffer;
         wait_cycles(DISPLAY_SWITCH_CYCLES);
-        visible_buffer = draw_buffer;
 
         phase_x = (uint8_t)(phase_x + 2u);
         phase_y = (uint8_t)(phase_y + 3u);
+
+        cmd_clear_buffers(0, 2, 4, 12);
+        cmd_start_cube_hw(phase_x, phase_y);
+        wait_cycles(HW_RENDER_WAIT_CYCLES);
     }
 }
