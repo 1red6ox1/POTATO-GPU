@@ -333,7 +333,9 @@ module student (
     .inv_w_o  (vertex_post_inv_w)
   );
 
-  vertex_post_to_triangle2d vertex_post_to_triangle2d_i (
+  vertex_post_to_triangle2d #(
+    .FIFO_DEPTH(16)
+  ) vertex_post_to_triangle2d_i (
     .clk_i,
     .rst_ni,
     .in_ready_o (vertex_post_to_triangle2d_ready),
