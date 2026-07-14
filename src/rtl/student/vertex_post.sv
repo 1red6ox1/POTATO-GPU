@@ -32,6 +32,8 @@ module vertex_post #(
   input  logic signed [DATA_WIDTH-1:0] z_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] w_i [2:0],
 
+  input  logic        [10:0]           tri_id_i,
+
   // Is set if the triangle was processed
   output logic out_valid,
 
@@ -40,7 +42,9 @@ module vertex_post #(
   output logic signed [DATA_WIDTH-1:0] z_o     [2:0],
 
   // 1 / w output per vertex
-  output logic signed [DATA_WIDTH-1:0] inv_w_o [2:0]
+  output logic signed [DATA_WIDTH-1:0] inv_w_o [2:0],
+
+  output logic        [10:0]           tri_id_o 
 );
 
   localparam int ONE_FP = 1 <<< FRAC_WIDTH;
@@ -53,6 +57,7 @@ module vertex_post #(
   localparam int QUOT_W    = DIV_STEPS;
   localparam int CNT_W     = $clog2(DIV_STEPS);
   localparam logic [CNT_W-1:0] CNT_FIRST = CNT_W'(DIV_STEPS - 1);
+
 
   // Q16.16 fixed point multiply
   function automatic logic signed [DATA_WIDTH-1:0] mul_q(
@@ -156,7 +161,8 @@ module vertex_post #(
     end
   end
 
-  assign ready_o = (state_q == ST_IDLE) && rst_n;
+  assign ready_o = (state_q == ST_IDLE) && rst_n;\
+  assign tri_id_o = tri_id_i;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
