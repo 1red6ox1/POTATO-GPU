@@ -31,7 +31,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 5;
+  localparam int N = 7;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -115,6 +115,10 @@ module student (
 
   triangle2d_t triangle2d;
   logic triangle2d_ready, triangle2d_valid;
+  triangle2d_t vertex_triangle2d;
+  logic vertex_triangle2d_ready, vertex_triangle2d_valid;
+  triangle2d_t raster_triangle2d;
+  logic raster_triangle2d_ready, raster_triangle2d_valid;
   rasterization_param_t raster_param;
   logic raster_param_ready, raster_param_valid;
   rasterization_param_t raster_core_param;
@@ -151,9 +155,9 @@ module student (
   rasterizer_param rasterizer_param_i (
     .clk_i,
     .rst_ni,
-    .triangle2d_i(triangle2d),
-    .in_valid_i  (triangle2d_valid),
-    .in_ready_o  (triangle2d_ready),
+    .triangle2d_i(raster_triangle2d),
+    .in_valid_i  (raster_triangle2d_valid),
+    .in_ready_o  (raster_triangle2d_ready),
     .param_o     (raster_param),
     .out_valid_o (raster_param_valid),
     .out_ready_i (raster_param_ready)
@@ -262,8 +266,14 @@ module student (
   logic [10:0]                  vertex_post_sy [2:0];
   logic signed [31:0]           vertex_post_ndc_z [2:0];
   logic signed [31:0]           vertex_post_inv_w [2:0];
+  logic                         vertex_post_to_triangle2d_ready;
   (* mark_debug = "true" *)
   logic [138:0]                 vertex_debug;
+
+  assign raster_triangle2d_valid = vertex_triangle2d_valid || triangle2d_valid;
+  assign raster_triangle2d = vertex_triangle2d_valid ? vertex_triangle2d : triangle2d;
+  assign vertex_triangle2d_ready = raster_triangle2d_ready;
+  assign triangle2d_ready = raster_triangle2d_ready && !vertex_triangle2d_valid;
 
   assign vertex_debug = {
     vertex_out_valid,
@@ -278,10 +288,10 @@ module student (
     .clk_i,
     .rst_ni,
 
-    .tl_cfg_i(tl_devices_h2d[4]),
-    .tl_cfg_o(tl_devices_d2h[4]),
-    .tl_vec_i(tl_devices_h2d[5]),
-    .tl_vec_o(tl_devices_d2h[5]),
+    .tl_cfg_i(tl_devices_h2d[5]),
+    .tl_cfg_o(tl_devices_d2h[5]),
+    .tl_vec_i(tl_devices_h2d[6]),
+    .tl_vec_o(tl_devices_d2h[6]),
 
     .out_valid_o(vertex_out_valid),
     .out_ready_i(vertex_out_ready),
@@ -299,7 +309,7 @@ module student (
     .in_vec_i   (vertex_out_vec),
 
     .out_valid_o(vertex_post_in_valid),
-    .out_ready_i(vertex_post_ready),
+    .out_ready_i(vertex_post_ready && vertex_post_to_triangle2d_ready),
     .out_id_o   (vertex_post_in_id),
     .out_x_o    (vertex_post_x),
     .out_y_o    (vertex_post_y),
@@ -321,6 +331,20 @@ module student (
     .sy_o     (vertex_post_sy),
     .z_o      (vertex_post_ndc_z),
     .inv_w_o  (vertex_post_inv_w)
+  );
+
+  vertex_post_to_triangle2d vertex_post_to_triangle2d_i (
+    .clk_i,
+    .rst_ni,
+    .in_ready_o (vertex_post_to_triangle2d_ready),
+    .in_valid_i (vertex_post_out_valid),
+    .sx_i       (vertex_post_sx),
+    .sy_i       (vertex_post_sy),
+    .z_i        (vertex_post_ndc_z),
+    .inv_w_i    (vertex_post_inv_w),
+    .triangle2d_o(vertex_triangle2d),
+    .out_valid_o(vertex_triangle2d_valid),
+    .out_ready_i(vertex_triangle2d_ready)
   );
   
 `ifndef SYNTHESIS
