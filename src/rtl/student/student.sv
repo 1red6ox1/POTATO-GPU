@@ -157,8 +157,21 @@ module student (
   /* Fixed-function rasterization pipeline */
 
   logic                         vertex_out_valid;
+  logic                         vertex_out_ready;
   logic [9:0]                   vertex_out_id;
   logic signed [31:0]           vertex_out_vec [3:0];
+  logic                         vertex_post_in_valid;
+  logic                         vertex_post_ready;
+  logic [9:0]                   vertex_post_in_id;
+  logic signed [31:0]           vertex_post_x [2:0];
+  logic signed [31:0]           vertex_post_y [2:0];
+  logic signed [31:0]           vertex_post_z [2:0];
+  logic signed [31:0]           vertex_post_w [2:0];
+  logic                         vertex_post_out_valid;
+  logic [10:0]                  vertex_post_sx [2:0];
+  logic [10:0]                  vertex_post_sy [2:0];
+  logic signed [31:0]           vertex_post_ndc_z [2:0];
+  logic signed [31:0]           vertex_post_inv_w [2:0];
   (* mark_debug = "true" *)
   logic [138:0]                 vertex_debug;
 
@@ -181,9 +194,43 @@ module student (
     .tl_vec_o(tl_devices_d2h[5]),
 
     .out_valid_o(vertex_out_valid),
-    .out_ready_i(1'b1),
+    .out_ready_i(vertex_out_ready),
     .out_id_o   (vertex_out_id),
     .out_vec_o  (vertex_out_vec)
+  );
+
+  vertex_triangle_collector vertex_triangle_collector_i (
+    .clk_i,
+    .rst_ni,
+
+    .in_valid_i (vertex_out_valid),
+    .in_ready_o (vertex_out_ready),
+    .in_id_i    (vertex_out_id),
+    .in_vec_i   (vertex_out_vec),
+
+    .out_valid_o(vertex_post_in_valid),
+    .out_ready_i(vertex_post_ready),
+    .out_id_o   (vertex_post_in_id),
+    .out_x_o    (vertex_post_x),
+    .out_y_o    (vertex_post_y),
+    .out_z_o    (vertex_post_z),
+    .out_w_o    (vertex_post_w)
+  );
+
+  vertex_post vertex_post_i (
+    .clk      (clk_i),
+    .rst_n    (rst_ni),
+    .in_valid (vertex_post_in_valid),
+    .ready_o  (vertex_post_ready),
+    .x_i      (vertex_post_x),
+    .y_i      (vertex_post_y),
+    .z_i      (vertex_post_z),
+    .w_i      (vertex_post_w),
+    .out_valid(vertex_post_out_valid),
+    .sx_o     (vertex_post_sx),
+    .sy_o     (vertex_post_sy),
+    .z_o      (vertex_post_ndc_z),
+    .inv_w_o  (vertex_post_inv_w)
   );
 
 endmodule

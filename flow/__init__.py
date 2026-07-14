@@ -63,6 +63,7 @@ module_tbs = [
     "hdmi_tb",
     "dpram_tb",
     "vertex_processor_tb",
+    "vertex_triangle_collector_tb",
     "vertex_post_tb",
 ]
 
