@@ -34,7 +34,7 @@ void vec3_sub(vec3_t dest, vec3_t a, vec3_t b) {
 }
 
 fixed_t vec3_abs(vec3_t in) {
-	fixed_t radicand = 0;
+	uint64_t radicand = 0;
 	for (int i = 0; i < 3; i++) {
 		uint64_t component = (uint64_t)in[i];
 		radicand += component * component;
