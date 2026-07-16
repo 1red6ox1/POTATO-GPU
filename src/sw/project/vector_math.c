@@ -34,12 +34,11 @@ void vec3_sub(vec3_t dest, vec3_t a, vec3_t b) {
 }
 
 fixed_t vec3_abs(vec3_t in) {
-	uint64_t radicand = 0;
+	fixed_t radicand = 0;
 	for (int i = 0; i < 3; i++) {
-		int64_t component = in[i];
-		radicand += (uint64_t)(component * component);
+		radicand += fixed_mul(in[i], in[i]);
 	}
-	return (fixed_t)isqrt_u64(radicand);
+	return fixed_sqrt(radicand);
 }
 
 fixed_t vec3_dot(vec3_t vec1, vec3_t vec2) {
