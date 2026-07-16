@@ -28,7 +28,7 @@
 #define PROJECT_RENDER_CUBE_FACE       4
 
 #ifndef PROJECT_RENDER_MODE
-#define PROJECT_RENDER_MODE PROJECT_RENDER_STATIC_CUBE
+#define PROJECT_RENDER_MODE PROJECT_RENDER_ANIMATED_CUBE
 #endif
 
 #ifndef PROJECT_CUBE_FACE_INDEX
@@ -237,10 +237,15 @@ static void cmd_start_vertex_hw(uint32_t last_triangle) {
 }
 
 static void cmd_write_vertex_matrix(uint8_t phase_x, uint8_t phase_y) {
+    (void)phase_y;
+
+    int32_t camera_sin = sin_q14(phase_x);
+    int32_t camera_cos = cos_q14(phase_x);
+
     vec3_t eye = {
-        scaled_q16_from_q14(sin_q14(phase_y), CAMERA_Z),
-        scaled_q16_from_q14(sin_q14(phase_x), CUBE_SIZE),
-        scaled_q16_from_q14(cos_q14(phase_y), CAMERA_Z),
+        int_to_q16(0),
+        scaled_q16_from_q14(camera_sin, CAMERA_Z),
+        scaled_q16_from_q14(camera_cos, CAMERA_Z),
     };
     vec3_t center = {
         int_to_q16(0),
@@ -249,8 +254,8 @@ static void cmd_write_vertex_matrix(uint8_t phase_x, uint8_t phase_y) {
     };
     vec3_t up = {
         int_to_q16(0),
-        int_to_q16(1),
-        int_to_q16(0),
+        scaled_q16_from_q14(camera_cos, 1),
+        -scaled_q16_from_q14(camera_sin, 1),
     };
     matrix_t view;
     matrix_t projection;
@@ -378,7 +383,6 @@ int main(void) {
         wait_cycles(DISPLAY_SWITCH_CYCLES);
 
         phase_x = (uint8_t)(phase_x + 2u);
-        phase_y = (uint8_t)(phase_y + 3u);
 
         cmd_clear_buffers(0, 2, 4, 12);
         cmd_start_cube_hw(phase_x, phase_y);
