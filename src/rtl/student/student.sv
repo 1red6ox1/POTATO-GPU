@@ -115,6 +115,8 @@ module student (
 
   triangle2d_t triangle2d;
   logic triangle2d_ready, triangle2d_valid;
+  logic [1:0] triangle2d_fbid_color;
+  logic [1:0] triangle2d_fbid_depth;
   triangle2d_t vertex_triangle2d;
   logic vertex_triangle2d_ready, vertex_triangle2d_valid;
   triangle2d_t raster_triangle2d;
@@ -147,6 +149,8 @@ module student (
     .rst_ni,
     .tl_i       (tl_devices_h2d[4]),
     .tl_o       (tl_devices_d2h[4]),
+    .fbid_color_o(triangle2d_fbid_color),
+    .fbid_depth_o(triangle2d_fbid_depth),
     .triangle2d_o(triangle2d),
     .out_ready_i(triangle2d_ready),
     .out_valid_o(triangle2d_valid)
@@ -347,6 +351,8 @@ module student (
     .sy_i       (vertex_post_sy),
     .z_i        (vertex_post_ndc_z),
     .inv_w_i    (vertex_post_inv_w),
+    .fbid_color_i(triangle2d_fbid_color),
+    .fbid_depth_i(triangle2d_fbid_depth),
     .triangle2d_o(vertex_triangle2d),
     .out_valid_o(vertex_triangle2d_valid),
     .out_ready_i(vertex_triangle2d_ready)

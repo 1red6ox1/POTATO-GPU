@@ -6,9 +6,7 @@ module vertex_post_to_triangle2d
 #(
   parameter int unsigned DATA_WIDTH = 32,
   parameter int unsigned FRAC_WIDTH = 16,
-  parameter int unsigned FIFO_DEPTH = 4,
-  parameter logic [1:0] FBID_COLOR = 2'd0,
-  parameter logic [1:0] FBID_DEPTH = 2'd0
+  parameter int unsigned FIFO_DEPTH = 4
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -19,6 +17,8 @@ module vertex_post_to_triangle2d
   input  logic [10:0] sy_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] z_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] inv_w_i [2:0],
+  input  logic [1:0] fbid_color_i,
+  input  logic [1:0] fbid_depth_i,
 
   output triangle2d_t triangle2d_o,
   output logic        out_valid_o,
@@ -86,8 +86,8 @@ module vertex_post_to_triangle2d
     area = $signed(dx10) * $signed(dy20) - $signed(dy10) * $signed(dx20);
 
     triangle_i = '{
-      fbid_color: FBID_COLOR,
-      fbid_depth: FBID_DEPTH,
+      fbid_color: fbid_color_i,
+      fbid_depth: fbid_depth_i,
 
       ax: x[0],
       ay: y[0],

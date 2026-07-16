@@ -8,6 +8,8 @@ import rasterizer_pkg::*;
 	input  tlul_pkg::tl_h2d_t tl_i,
 	output tlul_pkg::tl_d2h_t tl_o,
 
+	output logic [1:0]                  fbid_color_o,
+	output logic [1:0]                  fbid_depth_o,
 	output triangle2d_t triangle2d_o,
 	input  logic                        out_ready_i,
 	output logic                        out_valid_o
@@ -27,6 +29,8 @@ import rasterizer_pkg::*;
 	);
 
 	triangle2d_t triangle2d_q;
+	assign fbid_color_o = reg2hw.fbid_color.q;
+	assign fbid_depth_o = reg2hw.fbid_depth.q;
 	assign triangle2d_o = triangle2d_q;
 
 	always_ff @(posedge clk_i or negedge rst_ni) begin
