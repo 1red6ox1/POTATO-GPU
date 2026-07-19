@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: SHL-2.1
+// SPDX-FileCopyrightText: 2026 POTATO GPU Contributors
+
+{
+  name: "vertex_processor"
+  clock_primary: "sys_clk"
+  bus_device: "tlul"
+  regwidth: "32"
+  registers: [
+    {
+      name: "triangle_count"
+      desc: "Last triangle ID to render"
+      swaccess: "rw"
+      hwaccess: "hro"
+      hwqe: "true"
+      fields: [
+        {bits: "9:0", name: "val", resval: "0", desc: "Last triangle ID to render"}
+      ]
+    }
+    {
+      name: "start_render"
+      desc: "Write one to restart and enable rendering"
+      swaccess: "rw"
+      hwaccess: "hro"
+      hwqe: "true"
+      fields: [
+        {bits: "0", name: "val", resval: "0", desc: "Write one to restart and enable rendering"}
+      ]
+    }
+  ]
+}

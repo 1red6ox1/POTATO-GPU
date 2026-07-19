@@ -130,14 +130,7 @@ module rvlab_ddr_block_cache #(
         data_mem[access_idx_q][8*i+:8] <= data_wdata[8*i+:8];
       end
     end
-    // We want to read from the currently addressed index in most cases,
-    // so that we can issue a response in the next cycle.
-    // If there is an inbound response from the backend (use_be_port = 1),
-    // then we potentially want to resume normal operation after this
-    // cycle, i.e. complete the request that caused the miss. This however
-    // requires reading from the stored index (request that caused the stall)
-    // instead of the one from the current address.
-    data_rdata_raw <= data_mem[use_be_port ? access_idx_q : access_idx];
+    data_rdata_raw <= data_mem[stall ? access_idx_q : access_idx];
   end
 
   always_ff @(posedge clk_i) begin

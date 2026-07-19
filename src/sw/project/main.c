@@ -3,7 +3,10 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <rvlab.h>
+
+#include "graphics_math.h"
 
 uint32_t last_frame;
 
@@ -31,54 +34,293 @@ void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned
     uint32_t dt = finish - last_frame;
     uint32_t fps_x10 = 500000000 / dt;
 
-    //printf("\rFPS: %u.%u", fps_x10/10, fps_x10%10);
+    //printf("\rFPS: %u.%u     ", fps_x10/10, fps_x10%10);
 
     last_frame = finish;
-
-    REG32(HDMI_CTRL_FBID(0)) = fbid;
 }
 
+typedef vec4_t triangle_t[3];
+
+void viewport_transform(vec4_t clip, int16_t* x, int16_t* y) {
+    fixed_t ndc_x = fixed_div(clip[0], clip[3]);
+    fixed_t ndc_y = fixed_div(clip[1], clip[3]);
+    fixed_t screen_x = ((ndc_x + (1<<16)) >> 1) * 1920;
+    fixed_t screen_y = ((ndc_y + (1<<16)) >> 1) * 1080;
+    *x = screen_x >> 16;
+    *y = 1080 - (screen_y >> 16);
+}
+
+void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
+    uint8_t cxo = x & 0x1F;
+    uint8_t cxb = x >> 5;
+    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
+    uint32_t addr_g = addr_r | (1 << 5);
+    uint32_t addr_b = addr_r | (2 << 5);
+    *((uint8_t*)addr_r) = r;
+    *((uint8_t*)addr_g) = g;
+    *((uint8_t*)addr_b) = b;
+}
+
+void get_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t *r, uint8_t *g, uint8_t *b) {
+    uint8_t cxo = x & 0x1F;
+    uint8_t cxb = x >> 5;
+    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
+    uint32_t addr_g = addr_r | (1 << 5);
+    uint32_t addr_b = addr_r | (2 << 5);
+    *r = *((uint8_t*)addr_r);
+    *g = *((uint8_t*)addr_g);
+    *b = *((uint8_t*)addr_b);
+}
+
+void render_line(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+    int16_t dx = x0 < x1 ? x1 - x0 : x0 - x1;
+    int16_t sx = x0 < x1 ? 1 : -1;
+    int16_t dy = y0 < y1 ? y0 - y1 : y1 - y0;
+    int16_t sy = y0 < y1 ? 1 : -1;
+    int16_t err = dx + dy;
+    int16_t err2;
+
+    while (1) {
+        if (x0 >= 0 && x0 < 1920 && y0 >= 0 && y0 < 1080) {
+            set_pixel(fbid, x0, y0, 255, 255, 255);
+        }
+        err2 = err * 2;
+        if (err2 >= dy) {
+            if (x0 == x1) break;
+            err = err + dy;
+            x0 = x0 + sx;
+        }
+        if (err2 <= dx) {
+            if (y0 == y1) break;
+            err = err + dx;
+            y0 = y0 + sy;
+        }
+    }
+}
+
+int16_t clamp(int16_t x, int16_t low, int16_t high) {
+    if (x < low) return low;
+    if (x > high) return high;
+    return x;
+}
+
+typedef int32_t edgefn_coeffs[3];
+
+void gen_edgefn_coeffs(edgefn_coeffs dest, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+    dest[0] = y1 - y0;
+    dest[1] = x0 - x1;
+    dest[2] = x1 * y0 - x0 * y1;
+}
+
+int32_t edgefn(edgefn_coeffs coeffs, int32_t x, int32_t y) {
+    return coeffs[0] * x + coeffs[1] * y + coeffs[2];
+}
+
+void rasterize_tri(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
+    int16_t min_x, max_x;
+    int16_t min_y, max_y;
+    min_x = x0;
+    if (x1 < min_x) min_x = x1;
+    if (x2 < min_x) min_x = x2;
+    max_x = x0;
+    if (x1 > max_x) max_x = x1;
+    if (x2 > max_x) max_x = x2;
+    min_y = y0;
+    if (y1 < min_y) min_y = y1;
+    if (y2 < min_y) min_y = y2;
+    max_y = y0;
+    if (y1 > max_y) max_y = y1;
+    if (y2 > max_y) max_y = y2;
+
+    min_x = clamp(min_x, 0, 1919);
+    max_x = clamp(max_x, 0, 1919);
+    min_y = clamp(min_y, 0, 1079);
+    max_y = clamp(max_y, 0, 1079);
+
+    edgefn_coeffs ab;
+    edgefn_coeffs bc;
+    edgefn_coeffs ca;
+
+    gen_edgefn_coeffs(ab, x0, y0, x1, y1);
+    gen_edgefn_coeffs(bc, x1, y1, x2, y2);
+    gen_edgefn_coeffs(ca, x2, y2, x0, y0);
+
+    int32_t ab_startval = edgefn(ab, min_x, min_y);
+    int32_t bc_startval = edgefn(bc, min_x, min_y);
+    int32_t ca_startval = edgefn(ca, min_x, min_y);
+
+    int32_t ab_val, bc_val, ca_val;
+
+    int32_t tri_area = edgefn(ab, x2, y2);
+    int32_t area_scaled = tri_area >> 8;
+
+    int32_t bary0, bary1, bary2;
+
+    for (int y = min_y; y <= max_y; y++) {
+        ab_val = ab_startval;
+        bc_val = bc_startval;
+        ca_val = ca_startval;
+
+        for (int x = min_x; x <= max_x; x++) {
+            if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
+                bary0 = ab_val / area_scaled;
+                bary1 = bc_val / area_scaled;
+                bary2 = ca_val / area_scaled;
+                set_pixel(fbid, x, y, bary0, bary1, bary2);
+            }
+            ab_val += ab[0];
+            bc_val += bc[0];
+            ca_val += ca[0];
+        }
+        ab_startval = ab_startval + ab[1];
+        bc_startval = bc_startval + bc[1];
+        ca_startval = ca_startval + ca[1];
+    }
+}
+
+void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
+    vec4_t clip_p0, clip_p1, clip_p2;
+    int16_t x0, x1, x2;
+    int16_t y0, y1, y2;
+    mat_vec_mul(clip_p0, VP, tri[0]);
+    mat_vec_mul(clip_p1, VP, tri[1]);
+    mat_vec_mul(clip_p2, VP, tri[2]);
+    viewport_transform(clip_p0, &x0, &y0);
+    viewport_transform(clip_p1, &x1, &y1);
+    viewport_transform(clip_p2, &x2, &y2);
+
+    rasterize_tri(fbid, x0, y0, x1, y1, x2, y2);
+
+    // Flush DDR cache
+    for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
+}
+
+#define F(x) ((x) << 16)
+#define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
+#define V4(x, y, z, w) {F(x), F(y), F(z), F(w)}
+// Default camera attributes: aspect 16/9, near 0.25, far 100
+#define FOVY 60
+#define INV_ASPECT 0x00009000
+#define NEAR (1<<14)
+#define FAR (100<<16)
+
+void testcase_single_tri(matrix_t VP, triangle_t tri) {
+    vec4_t clip[3];
+    int16_t x[3];
+    int16_t y[3];
+
+    mat_vec_mul(clip[0], VP, tri[0]);
+    mat_vec_mul(clip[1], VP, tri[1]);
+    mat_vec_mul(clip[2], VP, tri[2]);
+    viewport_transform(clip[0], &x[0], &y[0]);
+    viewport_transform(clip[1], &x[1], &y[1]);
+    viewport_transform(clip[2], &x[2], &y[2]);
+
+    printf("  WORLD SPACE:\n");
+    for (int k = 0; k < 3; k++) {
+        printf("    P%d: ", k);
+        vec4_print(tri[k]);
+        printf("\n");
+    }
+
+    printf("  CLIP SPACE:\n");
+    for (int k = 0; k < 3; k++) {
+        printf("    P%d: ", k);
+        vec4_print(clip[k]);
+        printf("\n");
+    }
+
+    printf("  SCREEN SPACE:\n");
+    for (int k = 0; k < 3; k++) {
+        bool discard = x[k] > 1919 || x[k] < 0 || y[k] > 1079 || y[k] < 0;
+        printf("    P%d: %4d/%4d %s", k, x[k], y[k], discard ? "(discarded)" : "");
+        printf("\n");
+    }
+}
+
+void testcases() {
+    /* Generate some test cases for different stages of the design */
+
+    #define NCAMPOS 5
+    #define NTRIS 2
+
+    matrix_t view_mat, proj_mat, VP;
+    vec3_t camera_positions[NCAMPOS] = {
+        {F( 5), F( 0), F( 0)},
+        {F(-2), F( 3), F( 1)},
+        {F( 1), F( 6), F( 0)},
+        {F( 3), F( 3), F( 3)},
+        {F( 0), F( 0), F( 1)}
+    };
+
+    triangle_t triangles[NTRIS] = {
+        {V4(0, 0, 0, 1), V4(1, 0, 0, 1), V4(1, 1, 0, 1)},
+        {V4(-2, -1, 1, 1), V4(1, 2, 0, 1), V4(-1, 0, 0, 1)}
+    };
+
+    persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
+
+    for (int i = 0; i < NCAMPOS; i++) {
+        vec3_t *camera_pos = &camera_positions[i];
+
+        // Generate matrices
+        lookat_mat(view_mat, *camera_pos, V3(0, 0, 0), V3(0, 1, 0));
+        mat_mat_mul(VP, proj_mat, view_mat);
+
+        printf("\n===\n\n");
+        printf("VIEWxPROJ for camera %d @ ", i);
+        vec3_print(*camera_pos);
+        printf(":\n");
+        mat_print(VP);
+        printf("\n");
+
+        for (int j = 0; j < NTRIS; j++) {
+            printf("TRI %d:\n", j);
+            testcase_single_tri(VP, triangles[j]);
+            printf("\n");
+        }
+    }
+}
 
 int main(void) {
     ddr_init();
-    printf("HDMI HPD Status: %d\n", REG32(HDMI_CTRL_HPD(0)));
 
+    vec3_t camera_pos = {F(5), F(2), F(-5)};
+    matrix_t view_mat, proj_mat, VP;
+    persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
+
+    //testcases();
+
+    uint8_t fbid = 0;
+    
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB); // Enable HDMI output
     REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
-
-    uint32_t r = 255;
-    uint32_t g = 0;
-    uint32_t b = 0;
-
-    uint32_t fbid = 1;
-
-    last_frame = read_csr("mcycle");
+    REG32(HDMI_CTRL_FBID(0)) = 0;
 
     while (1) {
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, ++g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, --r, g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, g, ++b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, --g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, ++r, g, b);
-            fbid = 1 - fbid;
-        }
-        for (int i = 0; i < 255; i++) {
-            cmd_clear_fb(fbid, r, g, --b);
-            fbid = 1 - fbid;
-        }
+        cmd_clear_fb(fbid, 0, 0, 0);
+
+        // Projection matrix stays the same, adjust view matrix and regenerate VP
+        lookat_mat(view_mat, camera_pos, V3(0, 0, 0), V3(0, 1, 0));
+        mat_mat_mul(VP, proj_mat, view_mat);
+
+        camera_pos[2] = camera_pos[2] + 0x00000400;
+        if (camera_pos[2] > (5 << 16)) camera_pos[2] = -5 << 16;
+
+        render_tri((triangle_t){
+            V4(0, 0, 0, 1),
+            V4(1, 1, 0, 1),
+            V4(1, 0, 0, 1)
+        }, VP, fbid);
+
+        render_tri((triangle_t){
+            V4(2, 0, 0, 1),
+            V4(3, 3, 0, 1),
+            V4(3, 0, 0, 1)
+        }, VP, fbid);
+
+        REG32(HDMI_CTRL_FBID(0)) = fbid;
+        fbid = (fbid + 1) % 4;
     }
 
     return 0;

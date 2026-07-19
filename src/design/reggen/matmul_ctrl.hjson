@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: SHL-2.1
+// SPDX-FileCopyrightText: 2026 POTATO GPU Contributors
+
+{
+  name: "matmul_ctrl"
+  clock_primary: "sys_clk"
+  bus_device: "tlul"
+  regwidth: "32"
+  registers: [
+    {
+      name: "mat_0_0"
+      desc: "Matrix element (0, 0)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_0_1"
+      desc: "Matrix element (0, 1)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_0_2"
+      desc: "Matrix element (0, 2)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_0_3"
+      desc: "Matrix element (0, 3)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_1_0"
+      desc: "Matrix element (1, 0)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_1_1"
+      desc: "Matrix element (1, 1)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_1_2"
+      desc: "Matrix element (1, 2)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_1_3"
+      desc: "Matrix element (1, 3)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_2_0"
+      desc: "Matrix element (2, 0)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_2_1"
+      desc: "Matrix element (2, 1)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_2_2"
+      desc: "Matrix element (2, 2)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_2_3"
+      desc: "Matrix element (2, 3)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_3_0"
+      desc: "Matrix element (3, 0)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_3_1"
+      desc: "Matrix element (3, 1)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_3_2"
+      desc: "Matrix element (3, 2)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+    {
+      name: "mat_3_3"
+      desc: "Matrix element (3, 3)"
+      swaccess: "rw"
+      hwaccess: "hro"
+      fields: [
+        {bits: "31:0", name: "val", resval: "0", desc: "value"}
+      ]
+    }
+  ]
+}
