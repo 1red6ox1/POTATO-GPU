@@ -2,326 +2,233 @@
  * SPDX-FileCopyrightText: 2024 RVLab Contributors
  */
 
-#include <stdio.h>
-#include <stdbool.h>
+#include <stdint.h>
 #include <rvlab.h>
-
 #include "graphics_math.h"
 
-uint32_t last_frame;
+#define SCREEN_WIDTH  1920
+#define SCREEN_HEIGHT 1080
 
-void cmd_clear_fb(unsigned char fbid, unsigned char r, unsigned char g, unsigned char b) {
+#define Q16_ONE 65536
 
-    //printf("Filling FB %u with R=%03u, G=%03u, B=%03u\n", fbid, r, g, b);
+#define CUBE_SIZE     150
+#define CAMERA_Z      760
+#define CAMERA_NEAR   10
+#define CAMERA_FAR    1200
 
+#define INITIAL_PHASE 16u
+#define DISPLAY_SWITCH_CYCLES 1000000u
+#define HW_RENDER_WAIT_CYCLES  4000000u
+
+#define BUFFER_A 0u
+#define BUFFER_B 1u
+
+#define TRI2D_FBID_COLOR 0x08u
+#define TRI2D_FBID_DEPTH 0x0cu
+
+typedef struct {
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} cube_vertex_t;
+
+typedef struct {
+    uint8_t a;
+    uint8_t b;
+    uint8_t c;
+} triangle_index_t;
+
+static const cube_vertex_t cube_vertices[8] = {
+    {-CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE},
+    { CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE},
+    { CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE},
+    {-CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE},
+    {-CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE},
+    { CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE},
+    { CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE},
+    {-CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE},
+};
+
+static const triangle_index_t cube_triangles[12] = {
+    {0, 1, 2}, {0, 2, 3},
+    {4, 6, 5}, {4, 7, 6},
+    {0, 3, 7}, {0, 7, 4},
+    {1, 5, 6}, {1, 6, 2},
+    {0, 4, 5}, {0, 5, 1},
+    {3, 2, 6}, {3, 6, 7},
+};
+
+static void wait_cycles(uint32_t cycles) {
+    uint32_t start = (uint32_t)read_csr("mcycle");
+
+    while ((uint32_t)((uint32_t)read_csr("mcycle") - start) < cycles);
+}
+
+static void cmd_enable_hdmi(uint8_t fbid) {
+    REG32(HDMI_CTRL_FBID(0)) = fbid;
+    REG32(HDMI_CTRL_CTRL(0)) =
+        (1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
+        | (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
+}
+
+static void cmd_clear_buffers(
+    uint8_t fbid,
+    uint8_t red,
+    uint8_t green,
+    uint8_t blue
+) {
     REG32(FRAMECLEAR_DMA_FBID(0)) = fbid;
-    REG32(FRAMECLEAR_DMA_CLEAR_COLOR(0)) = (r << 16) | (g << 8) | (b << 0);
+    REG32(FRAMECLEAR_DMA_CLEAR_COLOR(0)) =
+        ((uint32_t)red << 16) | ((uint32_t)green << 8) | blue;
+
     REG32(FRAMECLEAR_DMA_MODE(0)) = 0;
     REG32(FRAMECLEAR_DMA_STATUS(0)) = 1;
-
-    uint32_t start = read_csr("mcycle");
-
     while (REG32(FRAMECLEAR_DMA_STATUS(0)));
 
-    uint32_t finish = read_csr("mcycle");
-
-    //printf("Took %u cycles!\n", finish - start);
-
-    if (finish - start < 100000) {
-        printf("Frame clear unusually fast (%u cycles)!!\n", finish - start);
-    }
-
-    uint32_t dt = finish - last_frame;
-    uint32_t fps_x10 = 500000000 / dt;
-
-    //printf("\rFPS: %u.%u     ", fps_x10/10, fps_x10%10);
-
-    last_frame = finish;
+    REG32(FRAMECLEAR_DMA_MODE(0)) = 1;
+    REG32(FRAMECLEAR_DMA_STATUS(0)) = 1;
+    while (REG32(FRAMECLEAR_DMA_STATUS(0)));
 }
 
-typedef vec4_t triangle_t[3];
+static int32_t sin_q14(uint8_t phase) {
+    uint32_t half_phase = phase & 0x7fu;
+    uint32_t x = half_phase <= 64u ? half_phase : 128u - half_phase;
+    int32_t value = (int32_t)(x * (128u - x) * 4u);
 
-void viewport_transform(vec4_t clip, int16_t* x, int16_t* y) {
-    fixed_t ndc_x = fixed_div(clip[0], clip[3]);
-    fixed_t ndc_y = fixed_div(clip[1], clip[3]);
-    fixed_t screen_x = ((ndc_x + (1<<16)) >> 1) * 1920;
-    fixed_t screen_y = ((ndc_y + (1<<16)) >> 1) * 1080;
-    *x = screen_x >> 16;
-    *y = 1080 - (screen_y >> 16);
+    return (phase & 0x80u) ? -value : value;
 }
 
-void set_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
-    uint8_t cxo = x & 0x1F;
-    uint8_t cxb = x >> 5;
-    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
-    uint32_t addr_g = addr_r | (1 << 5);
-    uint32_t addr_b = addr_r | (2 << 5);
-    *((uint8_t*)addr_r) = r;
-    *((uint8_t*)addr_g) = g;
-    *((uint8_t*)addr_b) = b;
+static int32_t cos_q14(uint8_t phase) {
+    return sin_q14((uint8_t)(phase + 64u));
 }
 
-void get_pixel(uint8_t fbid, uint16_t x, uint16_t y, uint8_t *r, uint8_t *g, uint8_t *b) {
-    uint8_t cxo = x & 0x1F;
-    uint8_t cxb = x >> 5;
-    uint32_t addr_r = (1 << 31) | (fbid << 24) | (y << 13) | (cxb << 7) | cxo;
-    uint32_t addr_g = addr_r | (1 << 5);
-    uint32_t addr_b = addr_r | (2 << 5);
-    *r = *((uint8_t*)addr_r);
-    *g = *((uint8_t*)addr_g);
-    *b = *((uint8_t*)addr_b);
+static fixed_t int_to_q16(int32_t value) {
+    return value * Q16_ONE;
 }
 
-void render_line(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
-    int16_t dx = x0 < x1 ? x1 - x0 : x0 - x1;
-    int16_t sx = x0 < x1 ? 1 : -1;
-    int16_t dy = y0 < y1 ? y0 - y1 : y1 - y0;
-    int16_t sy = y0 < y1 ? 1 : -1;
-    int16_t err = dx + dy;
-    int16_t err2;
+static fixed_t scaled_q16_from_q14(int32_t value_q14, int32_t scale) {
+    return (fixed_t)(((int64_t)value_q14 * scale * Q16_ONE) >> 14);
+}
 
-    while (1) {
-        if (x0 >= 0 && x0 < 1920 && y0 >= 0 && y0 < 1080) {
-            set_pixel(fbid, x0, y0, 255, 255, 255);
-        }
-        err2 = err * 2;
-        if (err2 >= dy) {
-            if (x0 == x1) break;
-            err = err + dy;
-            x0 = x0 + sx;
-        }
-        if (err2 <= dx) {
-            if (y0 == y1) break;
-            err = err + dx;
-            y0 = y0 + sy;
+static uint32_t vertex_vec_addr(
+    uint32_t triangle,
+    uint32_t vertex,
+    uint32_t lane
+) {
+    return VERTEX_DATA0_BASE_ADDR | (triangle << 6) | (vertex << 4) | (lane << 2);
+}
+
+static uint8_t triangle_vertex_index(uint32_t triangle, uint32_t vertex) {
+    if (vertex == 0) return cube_triangles[triangle].a;
+    if (vertex == 1) return cube_triangles[triangle].b;
+    return cube_triangles[triangle].c;
+}
+
+static void cmd_load_cube_vertices(void) {
+    for (uint32_t triangle = 0; triangle < 12; triangle++) {
+        for (uint32_t vertex = 0; vertex < 3; vertex++) {
+            const cube_vertex_t *source = &cube_vertices[
+                triangle_vertex_index(triangle, vertex)
+            ];
+
+            REG32(vertex_vec_addr(triangle, vertex, 0)) =
+                (uint32_t)int_to_q16(source->x);
+            REG32(vertex_vec_addr(triangle, vertex, 1)) =
+                (uint32_t)int_to_q16(source->y);
+            REG32(vertex_vec_addr(triangle, vertex, 2)) =
+                (uint32_t)int_to_q16(source->z);
+            REG32(vertex_vec_addr(triangle, vertex, 3)) =
+                (uint32_t)Q16_ONE;
         }
     }
 }
 
-int16_t clamp(int16_t x, int16_t low, int16_t high) {
-    if (x < low) return low;
-    if (x > high) return high;
-    return x;
+static void cmd_set_raster_buffers(uint8_t color_fbid, uint8_t depth_fbid) {
+    REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_FBID_COLOR) = color_fbid & 0x3u;
+    REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_FBID_DEPTH) = depth_fbid & 0x3u;
 }
 
-typedef int32_t edgefn_coeffs[3];
+static void cmd_write_vertex_matrix(uint8_t phase) {
+    int32_t camera_sin = sin_q14(phase);
+    int32_t camera_cos = cos_q14(phase);
 
-void gen_edgefn_coeffs(edgefn_coeffs dest, int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
-    dest[0] = y1 - y0;
-    dest[1] = x0 - x1;
-    dest[2] = x1 * y0 - x0 * y1;
-}
-
-int32_t edgefn(edgefn_coeffs coeffs, int32_t x, int32_t y) {
-    return coeffs[0] * x + coeffs[1] * y + coeffs[2];
-}
-
-void rasterize_tri(uint8_t fbid, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2) {
-    int16_t min_x, max_x;
-    int16_t min_y, max_y;
-    min_x = x0;
-    if (x1 < min_x) min_x = x1;
-    if (x2 < min_x) min_x = x2;
-    max_x = x0;
-    if (x1 > max_x) max_x = x1;
-    if (x2 > max_x) max_x = x2;
-    min_y = y0;
-    if (y1 < min_y) min_y = y1;
-    if (y2 < min_y) min_y = y2;
-    max_y = y0;
-    if (y1 > max_y) max_y = y1;
-    if (y2 > max_y) max_y = y2;
-
-    min_x = clamp(min_x, 0, 1919);
-    max_x = clamp(max_x, 0, 1919);
-    min_y = clamp(min_y, 0, 1079);
-    max_y = clamp(max_y, 0, 1079);
-
-    edgefn_coeffs ab;
-    edgefn_coeffs bc;
-    edgefn_coeffs ca;
-
-    gen_edgefn_coeffs(ab, x0, y0, x1, y1);
-    gen_edgefn_coeffs(bc, x1, y1, x2, y2);
-    gen_edgefn_coeffs(ca, x2, y2, x0, y0);
-
-    int32_t ab_startval = edgefn(ab, min_x, min_y);
-    int32_t bc_startval = edgefn(bc, min_x, min_y);
-    int32_t ca_startval = edgefn(ca, min_x, min_y);
-
-    int32_t ab_val, bc_val, ca_val;
-
-    int32_t tri_area = edgefn(ab, x2, y2);
-    int32_t area_scaled = tri_area >> 8;
-
-    int32_t bary0, bary1, bary2;
-
-    for (int y = min_y; y <= max_y; y++) {
-        ab_val = ab_startval;
-        bc_val = bc_startval;
-        ca_val = ca_startval;
-
-        for (int x = min_x; x <= max_x; x++) {
-            if (ab_val >= 0 && bc_val >= 0 && ca_val >= 0) {
-                bary0 = ab_val / area_scaled;
-                bary1 = bc_val / area_scaled;
-                bary2 = ca_val / area_scaled;
-                set_pixel(fbid, x, y, bary0, bary1, bary2);
-            }
-            ab_val += ab[0];
-            bc_val += bc[0];
-            ca_val += ca[0];
-        }
-        ab_startval = ab_startval + ab[1];
-        bc_startval = bc_startval + bc[1];
-        ca_startval = ca_startval + ca[1];
-    }
-}
-
-void render_tri(triangle_t tri, matrix_t VP, uint8_t fbid) {
-    vec4_t clip_p0, clip_p1, clip_p2;
-    int16_t x0, x1, x2;
-    int16_t y0, y1, y2;
-    mat_vec_mul(clip_p0, VP, tri[0]);
-    mat_vec_mul(clip_p1, VP, tri[1]);
-    mat_vec_mul(clip_p2, VP, tri[2]);
-    viewport_transform(clip_p0, &x0, &y0);
-    viewport_transform(clip_p1, &x1, &y1);
-    viewport_transform(clip_p2, &x2, &y2);
-
-    rasterize_tri(fbid, x0, y0, x1, y1, x2, y2);
-
-    // Flush DDR cache
-    for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
-}
-
-#define F(x) ((x) << 16)
-#define V3(x, y, z) (vec3_t){F(x), F(y), F(z)}
-#define V4(x, y, z, w) {F(x), F(y), F(z), F(w)}
-// Default camera attributes: aspect 16/9, near 0.25, far 100
-#define FOVY 60
-#define INV_ASPECT 0x00009000
-#define NEAR (1<<14)
-#define FAR (100<<16)
-
-void testcase_single_tri(matrix_t VP, triangle_t tri) {
-    vec4_t clip[3];
-    int16_t x[3];
-    int16_t y[3];
-
-    mat_vec_mul(clip[0], VP, tri[0]);
-    mat_vec_mul(clip[1], VP, tri[1]);
-    mat_vec_mul(clip[2], VP, tri[2]);
-    viewport_transform(clip[0], &x[0], &y[0]);
-    viewport_transform(clip[1], &x[1], &y[1]);
-    viewport_transform(clip[2], &x[2], &y[2]);
-
-    printf("  WORLD SPACE:\n");
-    for (int k = 0; k < 3; k++) {
-        printf("    P%d: ", k);
-        vec4_print(tri[k]);
-        printf("\n");
-    }
-
-    printf("  CLIP SPACE:\n");
-    for (int k = 0; k < 3; k++) {
-        printf("    P%d: ", k);
-        vec4_print(clip[k]);
-        printf("\n");
-    }
-
-    printf("  SCREEN SPACE:\n");
-    for (int k = 0; k < 3; k++) {
-        bool discard = x[k] > 1919 || x[k] < 0 || y[k] > 1079 || y[k] < 0;
-        printf("    P%d: %4d/%4d %s", k, x[k], y[k], discard ? "(discarded)" : "");
-        printf("\n");
-    }
-}
-
-void testcases() {
-    /* Generate some test cases for different stages of the design */
-
-    #define NCAMPOS 5
-    #define NTRIS 2
-
-    matrix_t view_mat, proj_mat, VP;
-    vec3_t camera_positions[NCAMPOS] = {
-        {F( 5), F( 0), F( 0)},
-        {F(-2), F( 3), F( 1)},
-        {F( 1), F( 6), F( 0)},
-        {F( 3), F( 3), F( 3)},
-        {F( 0), F( 0), F( 1)}
+    vec3_t eye = {
+        int_to_q16(0),
+        scaled_q16_from_q14(camera_sin, CAMERA_Z),
+        scaled_q16_from_q14(camera_cos, CAMERA_Z),
     };
-
-    triangle_t triangles[NTRIS] = {
-        {V4(0, 0, 0, 1), V4(1, 0, 0, 1), V4(1, 1, 0, 1)},
-        {V4(-2, -1, 1, 1), V4(1, 2, 0, 1), V4(-1, 0, 0, 1)}
+    vec3_t center = {
+        int_to_q16(0),
+        int_to_q16(0),
+        int_to_q16(0),
     };
+    vec3_t up = {
+        int_to_q16(0),
+        scaled_q16_from_q14(camera_cos, 1),
+        -scaled_q16_from_q14(camera_sin, 1),
+    };
+    matrix_t view;
+    matrix_t projection;
+    matrix_t view_projection;
+    fixed_t near = int_to_q16(CAMERA_NEAR);
+    fixed_t far = int_to_q16(CAMERA_FAR);
+    fixed_t far_minus_near = far - near;
 
-    persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
+    lookat_mat(view, eye, center, up);
+    persp_proj_mat(
+        projection,
+        60,
+        fixed_div(int_to_q16(SCREEN_HEIGHT), int_to_q16(SCREEN_WIDTH)),
+        far,
+        near
+    );
 
-    for (int i = 0; i < NCAMPOS; i++) {
-        vec3_t *camera_pos = &camera_positions[i];
+    projection[2][2] = fixed_div(near, far_minus_near);
+    projection[2][3] = fixed_div(fixed_mul(far, near), far_minus_near);
 
-        // Generate matrices
-        lookat_mat(view_mat, *camera_pos, V3(0, 0, 0), V3(0, 1, 0));
-        mat_mat_mul(VP, proj_mat, view_mat);
+    mat_mat_mul(view_projection, projection, view);
 
-        printf("\n===\n\n");
-        printf("VIEWxPROJ for camera %d @ ", i);
-        vec3_print(*camera_pos);
-        printf(":\n");
-        mat_print(VP);
-        printf("\n");
-
-        for (int j = 0; j < NTRIS; j++) {
-            printf("TRI %d:\n", j);
-            testcase_single_tri(VP, triangles[j]);
-            printf("\n");
+    for (uint32_t row = 0; row < 4; row++) {
+        for (uint32_t column = 0; column < 4; column++) {
+            REG32(VERTEX_CFG0_BASE_ADDR + ((row * 4 + column) << 2)) =
+                (uint32_t)view_projection[row][column];
         }
     }
+}
+
+static void cmd_start_cube_hw(uint8_t phase, uint8_t color_fbid, uint8_t depth_fbid) {
+    cmd_set_raster_buffers(color_fbid, depth_fbid);
+    cmd_write_vertex_matrix(phase);
+    REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = 11;
+    REG32(VERTEX_PROCESSOR_START_RENDER(0)) = 1;
 }
 
 int main(void) {
-    ddr_init();
+    uint8_t phase = INITIAL_PHASE;
+    uint8_t display_fbid = BUFFER_A;
+    uint8_t render_fbid = BUFFER_A;
 
-    vec3_t camera_pos = {F(5), F(2), F(-5)};
-    matrix_t view_mat, proj_mat, VP;
-    persp_proj_mat(proj_mat, FOVY, INV_ASPECT, FAR, NEAR);
-
-    //testcases();
-
-    uint8_t fbid = 0;
-    
-    REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_PHY_ENABLE_LSB); // Enable HDMI output
-    REG32(HDMI_CTRL_CTRL(0)) |= (1<<HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
-    REG32(HDMI_CTRL_FBID(0)) = 0;
-
-    while (1) {
-        cmd_clear_fb(fbid, 0, 0, 0);
-
-        // Projection matrix stays the same, adjust view matrix and regenerate VP
-        lookat_mat(view_mat, camera_pos, V3(0, 0, 0), V3(0, 1, 0));
-        mat_mat_mul(VP, proj_mat, view_mat);
-
-        camera_pos[2] = camera_pos[2] + 0x00000400;
-        if (camera_pos[2] > (5 << 16)) camera_pos[2] = -5 << 16;
-
-        render_tri((triangle_t){
-            V4(0, 0, 0, 1),
-            V4(1, 1, 0, 1),
-            V4(1, 0, 0, 1)
-        }, VP, fbid);
-
-        render_tri((triangle_t){
-            V4(2, 0, 0, 1),
-            V4(3, 3, 0, 1),
-            V4(3, 0, 0, 1)
-        }, VP, fbid);
-
-        REG32(HDMI_CTRL_FBID(0)) = fbid;
-        fbid = (fbid + 1) % 4;
+    if (ddr_init()) {
+        while (1);
     }
 
-    return 0;
+    cmd_load_cube_vertices();
+    cmd_clear_buffers(render_fbid, 2, 4, 12);
+    cmd_start_cube_hw(phase, render_fbid, render_fbid);
+    wait_cycles(HW_RENDER_WAIT_CYCLES);
+    cmd_enable_hdmi(display_fbid);
+
+    while (1) {
+        wait_cycles(DISPLAY_SWITCH_CYCLES);
+
+        phase = (uint8_t)(phase + 2u);
+        render_fbid = display_fbid == BUFFER_A ? BUFFER_B : BUFFER_A;
+
+        cmd_clear_buffers(render_fbid, 2, 4, 12);
+        cmd_start_cube_hw(phase, render_fbid, render_fbid);
+        wait_cycles(HW_RENDER_WAIT_CYCLES);
+
+        display_fbid = render_fbid;
+        cmd_enable_hdmi(display_fbid);
+    }
 }

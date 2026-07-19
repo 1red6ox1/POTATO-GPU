@@ -25,12 +25,13 @@ module student (
   input  rvlab_ddr_pkg::ddr3_d2h_t ddr_i
 );
   import tlul_pkg::*;
+  import rasterizer_pkg::*;
 
   logic [7:0] led;
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 6;
+  localparam int N = 7;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -83,7 +84,7 @@ module student (
     .irq_o (irq_o)
   );
 
-  localparam int DDR_XBAR_N = 3;
+  localparam int DDR_XBAR_N = 6;
 
   rvlab_ddr_pkg::ddr3_h2d_t xbar_reqs [DDR_XBAR_N-1:0];
   rvlab_ddr_pkg::ddr3_d2h_t xbar_rsps [DDR_XBAR_N-1:0];
@@ -110,6 +111,102 @@ module student (
     .tl_o  (tl_devices_d2h[3]),
     .ddr_o (xbar_reqs[2]),
     .ddr_i (xbar_rsps[2])
+  );
+
+  triangle2d_t triangle2d;
+  logic triangle2d_ready, triangle2d_valid;
+  logic [1:0] triangle2d_fbid_color;
+  logic [1:0] triangle2d_fbid_depth;
+  triangle2d_t vertex_triangle2d;
+  logic vertex_triangle2d_ready, vertex_triangle2d_valid;
+  triangle2d_t raster_triangle2d;
+  logic raster_triangle2d_ready, raster_triangle2d_valid;
+  rasterization_param_t raster_param;
+  logic raster_param_ready, raster_param_valid;
+  rasterization_param_t raster_core_param;
+  logic [$clog2(FRAME_WIDTH / TILE_WIDTH)-1:0] raster_core_tile_x;
+  logic [$clog2(FRAME_HEIGHT)-1:0] raster_core_y;
+  logic raster_core_valid;
+  logic raster_core_ready;
+
+  rasterization_param_t raster_worker_param;
+  logic [$clog2(FRAME_WIDTH / TILE_WIDTH)-1:0] raster_worker_tile_x;
+  logic [$clog2(FRAME_HEIGHT)-1:0] raster_worker_y;
+  logic raster_worker_valid;
+  logic raster_worker_ready;
+  rvlab_ddr_pkg::ddr3_h2d_t worker_ddr_reqs [2:0];
+  rvlab_ddr_pkg::ddr3_d2h_t worker_ddr_rsps [2:0];
+
+  assign xbar_reqs[3] = worker_ddr_reqs[0];
+  assign xbar_reqs[4] = worker_ddr_reqs[1];
+  assign xbar_reqs[5] = worker_ddr_reqs[2];
+  assign worker_ddr_rsps[0] = xbar_rsps[3];
+  assign worker_ddr_rsps[1] = xbar_rsps[4];
+  assign worker_ddr_rsps[2] = xbar_rsps[5];
+
+  triangle2d_input triangle2d_input_i (
+    .clk_i,
+    .rst_ni,
+    .tl_i       (tl_devices_h2d[4]),
+    .tl_o       (tl_devices_d2h[4]),
+    .fbid_color_o(triangle2d_fbid_color),
+    .fbid_depth_o(triangle2d_fbid_depth),
+    .triangle2d_o(triangle2d),
+    .out_ready_i(triangle2d_ready),
+    .out_valid_o(triangle2d_valid)
+  );
+
+  rasterizer_param rasterizer_param_i (
+    .clk_i,
+    .rst_ni,
+    .triangle2d_i(raster_triangle2d),
+    .in_valid_i  (raster_triangle2d_valid),
+    .in_ready_o  (raster_triangle2d_ready),
+    .param_o     (raster_param),
+    .out_valid_o (raster_param_valid),
+    .out_ready_i (raster_param_ready)
+  );
+
+  rasterizer_core rasterizer_core_i (
+    .clk_i,
+    .rst_ni,
+    .param_i    (raster_param),
+    .in_valid_i (raster_param_valid),
+    .in_ready_o (raster_param_ready),
+    .param_o    (raster_core_param),
+    .tile_x_o   (raster_core_tile_x),
+    .y_o        (raster_core_y),
+    .out_valid_o(raster_core_valid),
+    .out_ready_i(raster_core_ready)
+  );
+
+  core_fifo core_fifo_i (
+    .clk_i,
+    .rst_ni,
+    .clear_i    (1'b0),
+    .param_i    (raster_core_param),
+    .tile_x_i   (raster_core_tile_x),
+    .y_i        (raster_core_y),
+    .in_valid_i (raster_core_valid),
+    .in_ready_o (raster_core_ready),
+    .param_o    (raster_worker_param),
+    .tile_x_o   (raster_worker_tile_x),
+    .y_o        (raster_worker_y),
+    .out_valid_o(raster_worker_valid),
+    .out_ready_i(raster_worker_ready),
+    .depth_o    ()
+  );
+
+  worker worker_i (
+    .clk_i,
+    .rst_ni,
+    .param_i    (raster_worker_param),
+    .tile_x_i   (raster_worker_tile_x),
+    .y_i        (raster_worker_y),
+    .in_valid_i (raster_worker_valid),
+    .in_ready_o (raster_worker_ready),
+    .ddr_o      (worker_ddr_reqs),
+    .ddr_i      (worker_ddr_rsps)
   );
 
   /* Cache / DDR3 system */
@@ -144,7 +241,8 @@ module student (
   );
 
   rvlab_ddr_mux #(
-    .N(DDR_XBAR_N)
+    .N               (DDR_XBAR_N),
+    .MAX_OUTSTANDING (32)
   ) ddr_xbar_i (
     .clk_i,
     .rst_ni,
@@ -172,8 +270,14 @@ module student (
   logic [10:0]                  vertex_post_sy [2:0];
   logic signed [31:0]           vertex_post_ndc_z [2:0];
   logic signed [31:0]           vertex_post_inv_w [2:0];
+  logic                         vertex_post_to_triangle2d_ready;
   (* mark_debug = "true" *)
   logic [138:0]                 vertex_debug;
+
+  assign raster_triangle2d_valid = vertex_triangle2d_valid || triangle2d_valid;
+  assign raster_triangle2d = vertex_triangle2d_valid ? vertex_triangle2d : triangle2d;
+  assign vertex_triangle2d_ready = raster_triangle2d_ready;
+  assign triangle2d_ready = raster_triangle2d_ready && !vertex_triangle2d_valid;
 
   assign vertex_debug = {
     vertex_out_valid,
@@ -188,10 +292,10 @@ module student (
     .clk_i,
     .rst_ni,
 
-    .tl_cfg_i(tl_devices_h2d[4]),
-    .tl_cfg_o(tl_devices_d2h[4]),
-    .tl_vec_i(tl_devices_h2d[5]),
-    .tl_vec_o(tl_devices_d2h[5]),
+    .tl_cfg_i(tl_devices_h2d[5]),
+    .tl_cfg_o(tl_devices_d2h[5]),
+    .tl_vec_i(tl_devices_h2d[6]),
+    .tl_vec_o(tl_devices_d2h[6]),
 
     .out_valid_o(vertex_out_valid),
     .out_ready_i(vertex_out_ready),
@@ -226,11 +330,63 @@ module student (
     .y_i      (vertex_post_y),
     .z_i      (vertex_post_z),
     .w_i      (vertex_post_w),
+    .tri_id_i ({1'b0, vertex_post_in_id}),
     .out_valid(vertex_post_out_valid),
+    .out_ready_i(vertex_post_to_triangle2d_ready),
     .sx_o     (vertex_post_sx),
     .sy_o     (vertex_post_sy),
     .z_o      (vertex_post_ndc_z),
-    .inv_w_o  (vertex_post_inv_w)
+    .inv_w_o  (vertex_post_inv_w),
+    .tri_id_o ()
   );
+
+  vertex_post_to_triangle2d #(
+    .FIFO_DEPTH(16)
+  ) vertex_post_to_triangle2d_i (
+    .clk_i,
+    .rst_ni,
+    .in_ready_o (vertex_post_to_triangle2d_ready),
+    .in_valid_i (vertex_post_out_valid),
+    .sx_i       (vertex_post_sx),
+    .sy_i       (vertex_post_sy),
+    .z_i        (vertex_post_ndc_z),
+    .inv_w_i    (vertex_post_inv_w),
+    .fbid_color_i(triangle2d_fbid_color),
+    .fbid_depth_i(triangle2d_fbid_depth),
+    .triangle2d_o(vertex_triangle2d),
+    .out_valid_o(vertex_triangle2d_valid),
+    .out_ready_i(vertex_triangle2d_ready)
+  );
+  
+`ifndef SYNTHESIS
+  int framebuffer_log_fd;
+
+  initial begin
+    framebuffer_log_fd = $fopen("log.csv", "w");
+  end
+
+  always @(posedge clk_i) begin
+    for (int host = 0; host < DDR_XBAR_N; host++) begin
+      if (framebuffer_log_fd != 0
+          && xbar_reqs[host].a_valid
+          && xbar_rsps[host].a_ready
+          && xbar_reqs[host].a_opcode inside {PutFullData, PutPartialData}
+          && xbar_reqs[host].a_address[23:21] == 3'b000) begin
+        $fdisplay(framebuffer_log_fd, "color,%0t,%0d,%h,%h,%h",
+                  $time,
+                  host,
+                  xbar_reqs[host].a_address,
+                  xbar_reqs[host].a_mask,
+                  xbar_reqs[host].a_data);
+      end
+    end
+  end
+
+  final begin
+    if (framebuffer_log_fd != 0) begin
+      $fclose(framebuffer_log_fd);
+    end
+  end
+`endif
 
 endmodule

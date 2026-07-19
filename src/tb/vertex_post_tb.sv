@@ -28,6 +28,9 @@ module vertex_post_tb;
   logic in_valid;
   logic ready;
   logic out_valid;
+  logic out_ready;
+  logic [10:0] tri_id_i;
+  logic [10:0] tri_id_o;
 
   vec3_t x_i, y_i, z_i, w_i;
   sx_t sx_o;
@@ -69,11 +72,14 @@ module vertex_post_tb;
     .y_i      (y_i),
     .z_i      (z_i),
     .w_i      (w_i),
+    .tri_id_i (tri_id_i),
     .out_valid(out_valid),
+    .out_ready_i(out_ready),
     .sx_o     (sx_o),
     .sy_o     (sy_o),
     .z_o      (z_o),
-    .inv_w_o  (inv_w_o)
+    .inv_w_o  (inv_w_o),
+    .tri_id_o (tri_id_o)
   );
 
   // Real to Q16.16 truncates toward zero like the module
@@ -172,6 +178,8 @@ module vertex_post_tb;
   task automatic reset_dut();
     rst_n    = 1'b0;
     in_valid = 1'b0;
+    out_ready = 1'b1;
+    tri_id_i = '0;
     x_i = '{default: '0};
     y_i = '{default: '0};
     z_i = '{default: '0};
@@ -188,6 +196,55 @@ module vertex_post_tb;
     #1;
     if (ready !== 1'b1) begin
       $error("reset: ready_o not high after reset release");
+      errcnt = errcnt + 1;
+    end
+  endtask
+
+  task automatic drive_and_check_backpressure(input string name,
+                                              input vec3_t xv, input vec3_t yv,
+                                              input vec3_t zv, input vec3_t wv);
+    sx_t exp_sx;
+    sy_t exp_sy;
+    vec3_t exp_z, exp_iw;
+    int t;
+
+    golden(xv, yv, zv, wv, exp_sx, exp_sy, exp_z, exp_iw);
+    out_ready = 1'b0;
+    drive_triangle(xv, yv, zv, wv);
+
+    t = 0;
+    while (out_valid !== 1'b1 && t < TIMEOUT) begin
+      @(posedge clk);
+      #1;
+      t = t + 1;
+    end
+    if (out_valid !== 1'b1) begin
+      $error("%s: timeout, no out_valid under backpressure", name);
+      errcnt = errcnt + 1;
+      out_ready = 1'b1;
+      return;
+    end
+    if (t !== LATENCY) begin
+      $error("%s: out_valid after %0d cycles, expected %0d", name, t, LATENCY);
+      errcnt = errcnt + 1;
+    end
+    check_result({name, "_initial"}, exp_sx, exp_sy, exp_z, exp_iw);
+
+    repeat (3) begin
+      @(posedge clk);
+      #1;
+      if (out_valid !== 1'b1 || ready !== 1'b0) begin
+        $error("%s: output was not held while out_ready_i was low", name);
+        errcnt = errcnt + 1;
+      end
+      check_result({name, "_held"}, exp_sx, exp_sy, exp_z, exp_iw);
+    end
+
+    out_ready = 1'b1;
+    @(posedge clk);
+    #1;
+    if (out_valid !== 1'b0 || ready !== 1'b1) begin
+      $error("%s: output was not consumed when out_ready_i rose", name);
       errcnt = errcnt + 1;
     end
   endtask
@@ -209,6 +266,7 @@ module vertex_post_tb;
       return;
     end
     x_i = xv; y_i = yv; z_i = zv; w_i = wv;
+    tri_id_i = tri_id_i + 1'b1;
     in_valid = 1'b1;
     @(posedge clk);
     @(negedge clk);
@@ -531,6 +589,13 @@ module vertex_post_tb;
     zv = '{qreal(0.0), qreal(0.0), qreal(0.0)};
     wv = '{qreal(4.0), qreal(2.0), qreal(1.0)};
     drive_and_check("persp_w421", xv, yv, zv, wv);
+
+    // The processed output must be held until the downstream stage is ready.
+    xv = '{qreal(0.0), qreal(0.25), qreal(-0.25)};
+    yv = '{qreal(0.25), qreal(-0.25), qreal(-0.25)};
+    zv = '{qreal(0.1), qreal(0.2), qreal(0.3)};
+    wv = '{qreal(1.0), qreal(2.0), qreal(4.0)};
+    drive_and_check_backpressure("output_backpressure", xv, yv, zv, wv);
 
     // Out of range NDC must clamp to the screen edges
     xv = '{qreal(2.0), qreal(-2.0), qreal(0.0)};

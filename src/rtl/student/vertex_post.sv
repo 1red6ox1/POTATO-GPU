@@ -32,15 +32,20 @@ module vertex_post #(
   input  logic signed [DATA_WIDTH-1:0] z_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] w_i [2:0],
 
-  // Is set if the triangle was processed
+  input  logic        [10:0]           tri_id_i,
+
+  // Output triangle stream. Data and out_valid are held until out_ready_i.
   output logic out_valid,
+  input  logic out_ready_i,
 
   output logic [SX_WIDTH-1:0]          sx_o    [2:0],
   output logic [SY_WIDTH-1:0]          sy_o    [2:0],
   output logic signed [DATA_WIDTH-1:0] z_o     [2:0],
 
   // 1 / w output per vertex
-  output logic signed [DATA_WIDTH-1:0] inv_w_o [2:0]
+  output logic signed [DATA_WIDTH-1:0] inv_w_o [2:0],
+
+  output logic        [10:0]           tri_id_o 
 );
 
   localparam int ONE_FP = 1 <<< FRAC_WIDTH;
@@ -53,6 +58,7 @@ module vertex_post #(
   localparam int QUOT_W    = DIV_STEPS;
   localparam int CNT_W     = $clog2(DIV_STEPS);
   localparam logic [CNT_W-1:0] CNT_FIRST = CNT_W'(DIV_STEPS - 1);
+
 
   // Q16.16 fixed point multiply
   function automatic logic signed [DATA_WIDTH-1:0] mul_q(
@@ -138,6 +144,8 @@ module vertex_post #(
   logic signed [DATA_WIDTH-1:0] ndc_y_q [2:0];
   logic signed [DATA_WIDTH-1:0] ndc_z_q [2:0];
   logic        [CNT_W-1:0]      cnt_q;
+  logic        [10:0]           tri_id_q;
+  logic                         out_fire;
 
   // One restoring division step per cycle: shift the next dividend bit into
   // the remainder and subtract the divisor unless that would underflow. The
@@ -156,12 +164,15 @@ module vertex_post #(
     end
   end
 
-  assign ready_o = (state_q == ST_IDLE) && rst_n;
+  assign out_fire = out_valid && out_ready_i;
+  assign ready_o = ((state_q == ST_IDLE) || (state_q == ST_OUT && out_fire)) && rst_n;
+  assign tri_id_o = tri_id_q;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       state_q   <= ST_IDLE;
       out_valid <= 1'b0;
+      tri_id_q  <= '0;
     end else begin
       out_valid <= 1'b0;
 
@@ -179,6 +190,7 @@ module vertex_post #(
               rem_q[i]  <= '0;
               quot_q[i] <= '0;
             end
+            tri_id_q <= tri_id_i;
             cnt_q   <= CNT_FIRST;
             state_q <= ST_DIV;
           end
@@ -215,7 +227,26 @@ module vertex_post #(
             inv_w_o[i] <= inv_w_q[i];
           end
           out_valid <= 1'b1;
-          state_q   <= ST_IDLE;
+          if (out_fire) begin
+            out_valid <= 1'b0;
+            if (in_valid && in_front) begin
+              for (int i = 0; i < 3; i++) begin
+                x_q[i]    <= x_i[i];
+                y_q[i]    <= y_i[i];
+                z_q[i]    <= z_i[i];
+                w_neg[i]  <= w_i[i][DATA_WIDTH-1];
+                w_zero[i] <= w_i[i] == '0;
+                denom[i]  <= w_i[i][DATA_WIDTH-1] ? unsigned'(-w_i[i]) : unsigned'(w_i[i]);
+                rem_q[i]  <= '0;
+                quot_q[i] <= '0;
+              end
+              tri_id_q <= tri_id_i;
+              cnt_q   <= CNT_FIRST;
+              state_q <= ST_DIV;
+            end else begin
+              state_q <= ST_IDLE;
+            end
+          end
         end
 
         default: state_q <= ST_IDLE;
