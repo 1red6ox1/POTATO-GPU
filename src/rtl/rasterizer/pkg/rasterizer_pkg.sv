@@ -5,7 +5,7 @@ package rasterizer_pkg;
 	localparam int unsigned TILE_WIDTH   = 32;
 	localparam int unsigned TILE_HEIGHT  = 8;
 
-	localparam int unsigned COORD_WIDTH = 16;
+	localparam int unsigned COORD_WIDTH = 12;
 	localparam int unsigned EDGE_WIDTH  = 2 * COORD_WIDTH;
 	localparam int unsigned DEPTH_WIDTH = 16;
 	localparam int unsigned DEPTH_FRAC_WIDTH = 12;
@@ -14,8 +14,14 @@ package rasterizer_pkg;
 	localparam int unsigned UVQ_FRAC_WIDTH = 24;
 	localparam int unsigned DELTA_WIDTH = 12;
 	localparam int unsigned UVQ_NUM_WIDTH = UVQ_WIDTH + DELTA_WIDTH + 1;
+	localparam int unsigned TILE_X_WIDTH = $clog2(FRAME_WIDTH / TILE_WIDTH);
+	localparam int unsigned TILE_Y_WIDTH = $clog2(FRAME_HEIGHT / TILE_HEIGHT);
+	localparam int unsigned FRAME_Y_WIDTH = $clog2(FRAME_HEIGHT);
+	localparam int unsigned TRIANGLE_ID_WIDTH = 11;
+	localparam int unsigned TEXTURE_ID_WIDTH = 8;
 
 	typedef struct packed {
+		logic [TRIANGLE_ID_WIDTH-1:0] triangle_id;
 		logic [1:0] fbid_color;
 		logic [1:0] fbid_depth;
 
@@ -32,30 +38,33 @@ package rasterizer_pkg;
 		logic signed [UVQ_WIDTH-1:0] buq;
 		logic signed [UVQ_WIDTH-1:0] bvq;
 		logic signed [UVQ_WIDTH-1:0] bq;
-		
+
 		logic signed [COORD_WIDTH-1:0] cx;
 		logic signed [COORD_WIDTH-1:0] cy;
 		logic        [DEPTH_WIDTH-1:0] cz;
 		logic signed [UVQ_WIDTH-1:0] cuq;
 		logic signed [UVQ_WIDTH-1:0] cvq;
 		logic signed [UVQ_WIDTH-1:0] cq;
-	} triangle2d_t;
+	} triangle_t;
 
 	typedef struct packed {
+		logic [TRIANGLE_ID_WIDTH-1:0] triangle_id;
+		logic [TEXTURE_ID_WIDTH-1:0] texture_id;
 		logic [1:0] fbid_color;
 		logic [1:0] fbid_depth;
 
-		logic [$clog2(FRAME_WIDTH / TILE_WIDTH)-1:0] bbox_min_x;
-		logic [$clog2(FRAME_WIDTH / TILE_WIDTH)-1:0] bbox_max_x;
-		logic [$clog2(FRAME_HEIGHT / TILE_HEIGHT)-1:0] bbox_min_y;
-		logic [$clog2(FRAME_HEIGHT / TILE_HEIGHT)-1:0] bbox_max_y;
+		logic [TILE_X_WIDTH-1:0] bbox_min_x;
+		logic [TILE_X_WIDTH-1:0] bbox_max_x;
+		logic [TILE_Y_WIDTH-1:0] bbox_min_y;
+		logic [TILE_Y_WIDTH-1:0] bbox_max_y;
 
 		logic signed [COORD_WIDTH-1:0] dx1;
-		logic signed [COORD_WIDTH-1:0] dx2;
-		logic signed [COORD_WIDTH-1:0] dx3;
 		logic signed [COORD_WIDTH-1:0] dy1;
+		logic signed [COORD_WIDTH-1:0] dx2;
 		logic signed [COORD_WIDTH-1:0] dy2;
+		logic signed [COORD_WIDTH-1:0] dx3;
 		logic signed [COORD_WIDTH-1:0] dy3;
+
 		logic signed [EDGE_WIDTH-1:0] e1;
 		logic signed [EDGE_WIDTH-1:0] e2;
 		logic signed [EDGE_WIDTH-1:0] e3;
@@ -75,13 +84,6 @@ package rasterizer_pkg;
 		logic signed [UVQ_WIDTH-1:0] q;
 		logic signed [UVQ_WIDTH-1:0] dq_dx;
 		logic signed [UVQ_WIDTH-1:0] dq_dy;
-	} rasterization_param_t;
-
-	typedef struct packed {
-		logic [1:0] fbid_color;
-		logic [1:0] fbid_depth;
-		logic [$clog2(FRAME_WIDTH / TILE_WIDTH)-1:0] tile_x;
-		logic [$clog2(FRAME_HEIGHT)-1:0] y;
-	} chunk_id_t;
+	} triangle_param_t;
 
 endpackage

@@ -13,6 +13,7 @@ module vertex_post_to_triangle2d
 
   output logic in_ready_o,
   input  logic in_valid_i,
+  input  logic [10:0] triangle_id_i,
   input  logic [10:0] sx_i [2:0],
   input  logic [10:0] sy_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] z_i [2:0],
@@ -20,17 +21,17 @@ module vertex_post_to_triangle2d
   input  logic [1:0] fbid_color_i,
   input  logic [1:0] fbid_depth_i,
 
-  output triangle2d_t triangle2d_o,
-  output logic        out_valid_o,
-  input  logic        out_ready_i
+  output triangle_t triangle_o,
+  output logic      out_valid_o,
+  input  logic      out_ready_i
 );
 
   localparam int unsigned DEPTH_W = $clog2(FIFO_DEPTH + 1);
+  localparam int unsigned Q_FRAC_SHIFT = UVQ_FRAC_WIDTH - FRAC_WIDTH;
   localparam logic signed [DATA_WIDTH-1:0] ONE_Q16 = DATA_WIDTH'(1 <<< FRAC_WIDTH);
-  localparam logic signed [UVQ_WIDTH-1:0] ONE_Q24 = UVQ_WIDTH'(1 <<< UVQ_FRAC_WIDTH);
   localparam logic signed [2*COORD_WIDTH+2:0] AREA_ZERO = '0;
 
-  triangle2d_t fifo_q [FIFO_DEPTH-1:0];
+  triangle_t fifo_q [FIFO_DEPTH-1:0];
   logic [$clog2(FIFO_DEPTH)-1:0] rptr_q;
   logic [$clog2(FIFO_DEPTH)-1:0] wptr_q;
   logic [DEPTH_W-1:0] depth_q;
@@ -38,17 +39,18 @@ module vertex_post_to_triangle2d
   logic signed [COORD_WIDTH-1:0] x [2:0];
   logic signed [COORD_WIDTH-1:0] y [2:0];
   logic [DEPTH_WIDTH-1:0] z_depth [2:0];
+  logic signed [UVQ_WIDTH-1:0] q [2:0];
   logic signed [COORD_WIDTH:0] dx10;
   logic signed [COORD_WIDTH:0] dy20;
   logic signed [COORD_WIDTH:0] dy10;
   logic signed [COORD_WIDTH:0] dx20;
   logic signed [2*COORD_WIDTH+2:0] area;
-  triangle2d_t triangle_i;
+  triangle_t triangle_i;
   logic push;
   logic pop;
   logic drop_degenerate;
 
-  assign triangle2d_o = fifo_q[rptr_q];
+  assign triangle_o = fifo_q[rptr_q];
   assign out_valid_o = depth_q != '0;
   assign in_ready_o = depth_q < DEPTH_W'(FIFO_DEPTH);
   assign pop = out_valid_o && out_ready_i;
@@ -73,6 +75,7 @@ module vertex_post_to_triangle2d
       x[i] = COORD_WIDTH'($signed({1'b0, sx_i[i]}));
       y[i] = COORD_WIDTH'($signed({1'b0, sy_i[i]}));
       z_depth[i] = q16_to_depth(z_i[i]);
+      q[i] = UVQ_WIDTH'($signed(inv_w_i[i]) <<< Q_FRAC_SHIFT);
     end
 
     dx10 = $signed({x[1][COORD_WIDTH-1], x[1]})
@@ -86,6 +89,7 @@ module vertex_post_to_triangle2d
     area = $signed(dx10) * $signed(dy20) - $signed(dy10) * $signed(dx20);
 
     triangle_i = '{
+      triangle_id: TRIANGLE_ID_WIDTH'(triangle_id_i),
       fbid_color: fbid_color_i,
       fbid_depth: fbid_depth_i,
 
@@ -94,21 +98,21 @@ module vertex_post_to_triangle2d
       az: z_depth[0],
       auq: '0,
       avq: '0,
-      aq: ONE_Q24,
+      aq: q[0],
 
       bx: x[1],
       by: y[1],
       bz: z_depth[1],
-      buq: ONE_Q24,
+      buq: q[1],
       bvq: '0,
-      bq: ONE_Q24,
+      bq: q[1],
 
       cx: x[2],
       cy: y[2],
       cz: z_depth[2],
       cuq: '0,
-      cvq: ONE_Q24,
-      cq: ONE_Q24
+      cvq: q[2],
+      cq: q[2]
     };
 
     if (area < AREA_ZERO) begin
@@ -116,15 +120,15 @@ module vertex_post_to_triangle2d
       triangle_i.by = y[2];
       triangle_i.bz = z_depth[2];
       triangle_i.buq = '0;
-      triangle_i.bvq = ONE_Q24;
-      triangle_i.bq = ONE_Q24;
+      triangle_i.bvq = q[2];
+      triangle_i.bq = q[2];
 
       triangle_i.cx = x[1];
       triangle_i.cy = y[1];
       triangle_i.cz = z_depth[1];
-      triangle_i.cuq = ONE_Q24;
+      triangle_i.cuq = q[1];
       triangle_i.cvq = '0;
-      triangle_i.cq = ONE_Q24;
+      triangle_i.cq = q[1];
     end
   end
 

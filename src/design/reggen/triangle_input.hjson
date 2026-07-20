@@ -1,0 +1,61 @@
+{
+  name: "triangle_input"
+  clock_primary: "sys_clk"
+  bus_device: "tlul"
+  regwidth: "32"
+  registers: [
+    {
+      name: "status"
+      desc: "Rasterizer triangle pending status"
+      swaccess: "ro"
+      hwaccess: "hwo"
+      fields: [{bits: "0", name: "valid", desc: "Submitted triangle is pending"}]
+    }
+    {
+      name: "rasterized_count"
+      desc: "Number of triangles whose final bounding-box tile was accepted by the rasterizer pipeline"
+      swaccess: "ro"
+      hwaccess: "hwo"
+      hwext: "true"
+      fields: [{bits: "31:0", name: "val", desc: "Rasterized triangle completion count"}]
+    }
+    {
+      name: "rasterized_triangle_id"
+      desc: "Triangle ID associated with the latest rasterized completion"
+      swaccess: "ro"
+      hwaccess: "hwo"
+      hwext: "true"
+      fields: [{bits: "31:0", name: "val", desc: "Latest rasterized triangle ID"}]
+    }
+    {
+      name: "submit"
+      desc: "Write one to submit the triangle registers"
+      swaccess: "wo"
+      hwaccess: "hro"
+      hwext: "true"
+      hwqe: "true"
+      fields: [{bits: "0", name: "valid", desc: "Submit triangle"}]
+    }
+    {name: "triangle_id", desc: "Triangle ID for the texture stage", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Triangle ID"}]}
+    {name: "fbid_color", desc: "Color framebuffer ID", swaccess: "rw", hwaccess: "hro", fields: [{bits: "1:0", name: "val", desc: "Framebuffer ID"}]}
+    {name: "fbid_depth", desc: "Depth framebuffer ID", swaccess: "rw", hwaccess: "hro", fields: [{bits: "1:0", name: "val", desc: "Framebuffer ID"}]}
+    {name: "ax", desc: "Vertex A x coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed coordinate"}]}
+    {name: "ay", desc: "Vertex A y coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed coordinate"}]}
+    {name: "az", desc: "Vertex A z coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed depth"}]}
+    {name: "auq", desc: "Vertex A U over Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "avq", desc: "Vertex A V over Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "aq", desc: "Vertex A Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "bx", desc: "Vertex B x coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed coordinate"}]}
+    {name: "by", desc: "Vertex B y coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed coordinate"}]}
+    {name: "bz", desc: "Vertex B z coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed depth"}]}
+    {name: "buq", desc: "Vertex B U over Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "bvq", desc: "Vertex B V over Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "bq", desc: "Vertex B Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "cx", desc: "Vertex C x coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed coordinate"}]}
+    {name: "cy", desc: "Vertex C y coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed coordinate"}]}
+    {name: "cz", desc: "Vertex C z coordinate", swaccess: "rw", hwaccess: "hro", fields: [{bits: "15:0", name: "val", desc: "Signed depth"}]}
+    {name: "cuq", desc: "Vertex C U over Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "cvq", desc: "Vertex C V over Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+    {name: "cq", desc: "Vertex C Q", swaccess: "rw", hwaccess: "hro", fields: [{bits: "31:0", name: "val", desc: "Signed fixed-point value"}]}
+  ]
+}
