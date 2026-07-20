@@ -39,8 +39,8 @@ int ddr_init(void);
 #include <reggen/frameclear_dma.h>
 #define FRAMECLEAR_DMA0_BASE_ADDR 0x10300000
 
-#include <reggen/triangle2d_input.h>
-#define TRIANGLE2D_INPUT0_BASE_ADDR 0x10400000
+#include <reggen/triangle_input.h>
+#define TRIANGLE_INPUT0_BASE_ADDR 0x10400000
 
 #include <reggen/matmul_ctrl.h>
 #include <reggen/vertex_processor.h>
@@ -48,5 +48,6 @@ int ddr_init(void);
 #define MATMUL_CTRL0_BASE_ADDR VERTEX_CFG0_BASE_ADDR
 #define VERTEX_PROCESSOR0_BASE_ADDR (VERTEX_CFG0_BASE_ADDR + 0x40)
 #define VERTEX_DATA0_BASE_ADDR 0x10600000
+#define LOAD_TEXTURE0_BASE_ADDR 0x10700000
 
 #endif // _RVLAB_H
