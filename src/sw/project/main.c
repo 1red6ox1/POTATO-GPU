@@ -50,12 +50,12 @@ static const vertex_t cube_vertices[8] = {
 };
 
 static const triangle_t cube_triangles[TRIANGLE_COUNT] = {
-	{0, 1, 2}, {0, 2, 3},
-	{4, 6, 5}, {4, 7, 6},
-	{0, 3, 7}, {0, 7, 4},
-	{1, 5, 6}, {1, 6, 2},
+	{0, 1, 2}, {0, 3, 2},
+	{4, 5, 6}, {4, 7, 6},
+	{0, 3, 7}, {0, 4, 7},
+	{1, 5, 6}, {6, 2, 1},
 	{0, 4, 5}, {0, 5, 1},
-	{3, 2, 6}, {3, 6, 7},
+	{3, 2, 6}, {3, 7, 6},
 };
 
 static uint32_t cycle_count(void) {
@@ -90,7 +90,7 @@ static void cmd_upload_geometry(void) {
 	for (uint32_t triangle = 0; triangle < TRIANGLE_COUNT; triangle++) {
 		const triangle_t *indices = &cube_triangles[triangle];
 		const uint8_t vertex_indices[3] = {
-			indices->a, indices->b, indices->c
+			indices->b, indices->a, indices->c
 		};
 
 		for (uint32_t vertex = 0; vertex < 3; vertex++) {
@@ -107,7 +107,7 @@ static void cmd_upload_geometry(void) {
 	}
 
 	// The register contains the last triangle ID, not the number of triangles.
-	REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = TRIANGLE_COUNT - 1u;
+	REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = TRIANGLE_COUNT > 0 ? TRIANGLE_COUNT - 1u : 0;
 }
 
 static void cmd_clear_color(uint8_t color_buffer) {
@@ -195,8 +195,7 @@ static void cmd_render_frame(
 	REG32(VERTEX_PROCESSOR_START_RENDER(0)) = 1u;
 
 	while (!(REG32(RASTERIZER_STATUS_STATUS(0))
-	         & RASTERIZER_STATUS_STATUS_VALID_MASK)) {
-	}
+	         & RASTERIZER_STATUS_STATUS_VALID_MASK));
 }
 
 static void report_fps(
@@ -213,7 +212,7 @@ static void report_fps(
 
 	printf(
 		"frame %u: work %u cycles, fps %u.%02u, color %u, depth %u, "
-		"camera (%d, %d, %d)\n",
+		"camera (%d, %d, %d)\r",
 		frame,
 		frame_cycles,
 		fps_x100 / 100u,
@@ -273,18 +272,18 @@ int main(void) {
 		frame++;
 		frame_cycles = cycle_count() - frame_start;
 		frame_start = cycle_count();
-		report_fps(
+		/*report_fps(
 			frame,
 			frame_cycles,
 			draw_color,
 			draw_depth,
 			camera_eye
-		);
+		);*/
 
 		// The next timing interval starts before printf above, so printing,
 		// camera work, matrix writes, clears and rasterization are all included.
 		draw_color = (uint8_t)((draw_color + 1u) % COLOR_BUFFER_COUNT);
 		draw_depth = (uint8_t)((draw_depth + 1u) % DEPTH_BUFFER_COUNT);
-		camera_phase = (uint8_t)(camera_phase + 2u);
+		camera_phase = (uint8_t)(camera_phase + 1u);
 	}
 }

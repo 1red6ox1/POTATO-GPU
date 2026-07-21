@@ -159,12 +159,12 @@ module writer (
 				ddr_o.a_data = blue_q;
 			end
 			DEPTH1: begin
-				ddr_o.a_address = {4'h1, fbid_depth_q, y_q, 7'({tile_x_q, 1'b0})};
+				ddr_o.a_address = {4'h2, fbid_depth_q, y_q, 7'({tile_x_q, 1'b0})};
 				ddr_o.a_mask = depth1_mask;
 				ddr_o.a_data = depth1_q;
 			end
 			DEPTH2: begin
-				ddr_o.a_address = {4'h1, fbid_depth_q, y_q, 7'({tile_x_q, 1'b1})};
+				ddr_o.a_address = {4'h2, fbid_depth_q, y_q, 7'({tile_x_q, 1'b1})};
 				ddr_o.a_mask = depth2_mask;
 				ddr_o.a_data = depth2_q;
 			end

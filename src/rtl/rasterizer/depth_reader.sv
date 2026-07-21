@@ -137,7 +137,7 @@ module depth_reader #(
 		ddr_o = '0;
 		ddr_o.a_valid   = ddr_valid_q;
 		ddr_o.a_opcode  = Get;
-		ddr_o.a_address = {4'h1, fbid_q, 11'(y_q), 7'({tile_x_q, Half})};
+		ddr_o.a_address = {4'h2, fbid_q, 11'(y_q), 7'({tile_x_q, Half})};
 		ddr_o.a_mask    = '1;
 		ddr_o.d_ready   = fifo_in_ready;
 	end
