@@ -15,7 +15,7 @@
 
 #define COLOR_BUFFER_COUNT 3u
 #define DEPTH_BUFFER_COUNT 2u
-#define TRIANGLE_COUNT     12u
+#define TRIANGLE_COUNT     192u
 
 #define BACKGROUND_COLOR 0x02040cu
 #define TRIANGLE_ID_MASK  0x7ffu
@@ -44,7 +44,7 @@ typedef struct {
 	uint8_t texid;
 } triangle_t;
 
-static const vertex_t cube_vertices[8] = {
+static const vertex_t unit_cube_verts[8] = {
 	{-FIXED_ONE, -FIXED_ONE, -FIXED_ONE},
 	{ FIXED_ONE, -FIXED_ONE, -FIXED_ONE},
 	{ FIXED_ONE,  FIXED_ONE, -FIXED_ONE},
@@ -55,7 +55,7 @@ static const vertex_t cube_vertices[8] = {
 	{-FIXED_ONE,  FIXED_ONE,  FIXED_ONE},
 };
 
-static const triangle_t cube_triangles[TRIANGLE_COUNT] = {
+static const triangle_t unit_cube_tris[12] = {
 	{0, 2, 3, 0b011000, 0}, {0, 1, 2, 0b011110, 0},
 	{5, 7, 6, 0b011000, 1}, {5, 4, 7, 0b011110, 1},
 	{4, 3, 7, 0b011000, 2}, {4, 0, 3, 0b011110, 2},
@@ -63,6 +63,125 @@ static const triangle_t cube_triangles[TRIANGLE_COUNT] = {
 	{1, 4, 5, 0b011000, 4}, {1, 0, 4, 0b011110, 4},
 	{6, 3, 2, 0b011000, 5}, {6, 7, 3, 0b011110, 5},
 };
+
+typedef struct { uint8_t v0, v1, v2, v3, texid; } face_def_t;
+
+static face_def_t cube_faces[6] = {
+    {0, 1, 2, 3, 0},
+    {5, 4, 7, 6, 0},
+    {4, 0, 3, 7, 0},
+    {1, 5, 6, 2, 0},
+    {1, 0, 4, 5, 0},
+    {6, 7, 3, 2, 0},
+};
+
+////////////////////////////////
+//                            //
+// SUBDIVIDED CUBE GENERATION //
+//                            //
+////////////////////////////////
+
+#define CUBE_SUBDIV    4                              /* squares per edge (4 -> 16 squares/face) */
+#define CUBE_GRID      (CUBE_SUBDIV + 1)              /* grid points per edge */
+#define CUBE_MAX_VERTS (6 * CUBE_GRID * CUBE_GRID)    /* safe upper bound, pre-dedup */
+#define CUBE_NUM_TRIS  (12 * CUBE_SUBDIV * CUBE_SUBDIV)
+
+static vertex_t cube_verts[CUBE_MAX_VERTS];
+static int      cube_vert_count = 0;
+
+static triangle_t cube_tris[CUBE_NUM_TRIS];
+
+/* Linear-scan dedup: reuse an existing vertex if one already sits at this
+ * exact position (shared cube edges/corners), otherwise append a new one. */
+static int find_or_add_vertex(fixed_t x, fixed_t y, fixed_t z) {
+    for (int i = 0; i < cube_vert_count; i++) {
+        if (cube_verts[i].x == x && cube_verts[i].y == y && cube_verts[i].z == z) {
+            return i;
+        }
+    }
+    cube_verts[cube_vert_count].x = x;
+    cube_verts[cube_vert_count].y = y;
+    cube_verts[cube_vert_count].z = z;
+    return cube_vert_count++;
+}
+
+/* Bilinear interpolation between corners c0(u=0,v=1) c1(u=1,v=1)
+ * c2(u=1,v=0) c3(u=0,v=0), sampled at grid point (i,j) of an NxN grid.
+ * Uses raw fixed_t values directly -- no need to know FIXED_ONE's scale. */
+static fixed_t lerp_corner(fixed_t c0, fixed_t c1, fixed_t c2, fixed_t c3,
+                            int i, int j, int n) {
+    int64_t num = (int64_t)c3 * (n - i) * (n - j)
+                + (int64_t)c2 * i       * (n - j)
+                + (int64_t)c0 * (n - i) * j
+                + (int64_t)c1 * i       * j;
+    int64_t den = (int64_t)n * n;
+    int64_t half = den / 2;
+    return (fixed_t)((num >= 0 ? num + half : num - half) / den);
+}
+
+static vertex_t interp_vertex(const vertex_t *v0, const vertex_t *v1,
+                               const vertex_t *v2, const vertex_t *v3,
+                               int i, int j, int n) {
+    vertex_t r;
+    r.x = lerp_corner(v0->x, v1->x, v2->x, v3->x, i, j, n);
+    r.y = lerp_corner(v0->y, v1->y, v2->y, v3->y, i, j, n);
+    r.z = lerp_corner(v0->z, v1->z, v2->z, v3->z, i, j, n);
+    return r;
+}
+
+/* Fills cube_verts[]/cube_vert_count and cube_tris[]. */
+void generate_subdivided_cube(void) {
+    const int n = CUBE_SUBDIV;
+    cube_vert_count = 0;
+    int tri_count = 0;
+
+    for (int f = 0; f < 6; f++) {
+        face_def_t *fd = &cube_faces[f];
+        const vertex_t *v0 = &unit_cube_verts[fd->v0];
+        const vertex_t *v1 = &unit_cube_verts[fd->v1];
+        const vertex_t *v2 = &unit_cube_verts[fd->v2];
+        const vertex_t *v3 = &unit_cube_verts[fd->v3];
+
+        uint8_t grid[CUBE_GRID][CUBE_GRID];
+
+        for (int j = 0; j <= n; j++) {
+            for (int i = 0; i <= n; i++) {
+                vertex_t p = interp_vertex(v0, v1, v2, v3, i, j, n);
+                grid[i][j] = (uint8_t)find_or_add_vertex(p.x, p.y, p.z);
+            }
+        }
+
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                uint8_t s0 = grid[i][j + 1];   /* low u,  high v -> like v0 */
+                uint8_t s1 = grid[i + 1][j + 1]; /* high u, high v -> like v1 */
+                uint8_t s2 = grid[i + 1][j];   /* high u, low v  -> like v2 */
+                uint8_t s3 = grid[i][j];       /* low u,  low v  -> like v3 */
+
+                triangle_t *t0 = &cube_tris[tri_count++];
+                t0->a = s0; t0->b = s2; t0->c = s3;
+                t0->uv = 0b011000;
+                t0->texid = fd->texid;
+
+                triangle_t *t1 = &cube_tris[tri_count++];
+                t1->a = s0; t1->b = s1; t1->c = s2;
+                t1->uv = 0b011110;
+                t1->texid = fd->texid++;
+            }
+        }
+    }
+    /* cube_vert_count now holds the actual unique vertex count (98 for
+     * CUBE_SUBDIV=4); tri_count always equals CUBE_NUM_TRIS. */
+}
+
+
+////////////////////////////////
+////////////////////////////////
+////////////////////////////////
+
+
+static const vertex_t   *model_vertices = cube_verts;
+static const triangle_t *model_tris     = cube_tris;
 
 static uint32_t cycle_count(void) {
 	return (uint32_t)read_csr("mcycle");
@@ -100,13 +219,13 @@ static void set_texids(uint8_t texid) {
 
 static void cmd_upload_geometry(void) {
 	for (uint32_t triangle = 0; triangle < TRIANGLE_COUNT; triangle++) {
-		const triangle_t *tri = &cube_triangles[triangle];
+		const triangle_t *tri = &model_tris[triangle];
 		const uint8_t vertex_indices[3] = {
 			tri->a, tri->b, tri->c
 		};
 
 		for (uint32_t vertex = 0; vertex < 3; vertex++) {
-			const vertex_t *position = &cube_vertices[vertex_indices[vertex]];
+			const vertex_t *position = &model_vertices[vertex_indices[vertex]];
 
 			REG32(vertex_address(triangle, vertex, 0)) = position->x;
 			REG32(vertex_address(triangle, vertex, 1)) = position->y;
@@ -229,6 +348,8 @@ int main(void) {
 		//while (1);
 	}
 
+	generate_subdivided_cube();
+
 	cmd_upload_geometry();
 
 	for (uint8_t buffer = 0; buffer < COLOR_BUFFER_COUNT; buffer++) {
@@ -243,16 +364,12 @@ int main(void) {
 		(1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
 		| (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
 
+	memcpy_dma(TEXTURE_RAM0_BASE_ADDR, VIDEO_MEM_BASE, 65536);
+
 	frame_start = cycle_count();
 	init = frame_start;
 	while (1) {
 		uint32_t frame_cycles;
-
-		uint32_t frameid = ((frame_start - init) / 2000000) % 54;
-
-		memcpy_dma(TEXTURE_RAM0_BASE_ADDR, VIDEO_MEM_BASE + (frameid << 12), 4096);
-
-		set_texids(0);
 
 		make_camera_matrix(camera_matrix, camera_phase, camera_eye);
 		cmd_upload_matrix(camera_matrix);
