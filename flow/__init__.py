@@ -11,6 +11,7 @@ from .simlibs_questa import SimlibsQuesta
 from .module_tb import ModuleTb
 from .sources import Sources
 from .reggen import RegisterGenerator
+from .project_utils import ProjectUtils
 from .ddr3_model import Ddr3Model
 
 flow = Flow()
@@ -34,6 +35,8 @@ flow['libsys'] = Libsys(dependency_map={'reggen': 'reggen'})
 for sw_dir in sw_dirs:
     flow[f'sw_{sw_dir}'] = Program(sw_dir, dependency_map={
         'libsys':'libsys', 'ref':'sw_test_rvlab', 'reggen': 'reggen'})
+
+flow['project_utils'] = ProjectUtils()
 
 # Hardware
 # --------

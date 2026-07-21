@@ -4,9 +4,14 @@
 
 #include "rvlab.h"
 #include "dma.h"
+#include "memcpy.h"
 
 void memcpy_soft(void *dest, void *src, uint32_t length) {
-    // implement me
+    int * prt_src = (int *) src;
+    int * prt_dst = (int *) dest;
+    for(int i=0; i < (length/sizeof(int)); i++) {
+        prt_dst[i] = prt_src[i];
+    }
 }
 
 void memcpy_dma(void *dest, void *src, uint32_t length) {

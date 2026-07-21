@@ -7,6 +7,7 @@
 #include <rvlab.h>
 
 #include "graphics_math.h"
+#include "memcpy.h"
 
 #define FIXED_ONE 0x00010000
 
@@ -32,7 +33,7 @@ typedef struct {
 	fixed_t z;
 } vertex_t;
 
-/* UV descriptor: 6 bit value describing UV coordinates of a triangle*/
+/* UV descriptor: 6 bit value describing UV coordinates of a triangle */
 typedef uint8_t uv_desc_t;
 
 typedef struct {
@@ -55,12 +56,12 @@ static const vertex_t cube_vertices[8] = {
 };
 
 static const triangle_t cube_triangles[TRIANGLE_COUNT] = {
-	{0, 2, 3, 0b001110, 0}, {0, 1, 2, 0b000111, 0},
-	{5, 7, 6, 0b001110, 1}, {5, 4, 7, 0b000111, 1},
-	{4, 3, 7, 0b001110, 2}, {4, 0, 3, 0b000111, 2},
-	{1, 6, 2, 0b001110, 3}, {1, 5, 6, 0b000111, 3},
-	{1, 4, 5, 0b001110, 4}, {1, 0, 4, 0b000111, 4},
-	{6, 3, 2, 0b001110, 5}, {6, 7, 3, 0b000111, 5},
+	{0, 2, 3, 0b011000, 0}, {0, 1, 2, 0b011110, 0},
+	{5, 7, 6, 0b011000, 1}, {5, 4, 7, 0b011110, 1},
+	{4, 3, 7, 0b011000, 2}, {4, 0, 3, 0b011110, 2},
+	{1, 6, 2, 0b011000, 3}, {1, 5, 6, 0b011110, 3},
+	{1, 4, 5, 0b011000, 4}, {1, 0, 4, 0b011110, 4},
+	{6, 3, 2, 0b011000, 5}, {6, 7, 3, 0b011110, 5},
 };
 
 static uint32_t cycle_count(void) {
@@ -89,6 +90,12 @@ static uint32_t vertex_address(
 		| (triangle << 6)
 		| (vertex << 4)
 		| (lane << 2);
+}
+
+static void set_texids(uint8_t texid) {
+	for (uint32_t triangle = 0; triangle < TRIANGLE_COUNT; triangle++) {
+		REG32(LOAD_TEXTURE0_BASE_ADDR + ((triangle & TRIANGLE_ID_MASK) << 2)) = texid;
+	}
 }
 
 static void cmd_upload_geometry(void) {
@@ -243,12 +250,12 @@ int main(void) {
 	uint32_t frame_start;
 	uint32_t frame = 0u;
 
+	uint32_t init = 0u;
+
 	if (ddr_init()) {
 		printf("DDR initialization failed\n");
 		//while (1);
 	}
-
-	REG32(UV_RAM0_BASE_ADDR) = 0xFF;
 
 	cmd_upload_geometry();
 
@@ -259,7 +266,7 @@ int main(void) {
 		cmd_clear_depth(buffer);
 	}
 
-	uint32_t *tex_ram = TEXTURE_RAM0_BASE_ADDR;
+	/*uint32_t *tex_ram = TEXTURE_RAM0_BASE_ADDR;
 	uint32_t *palette_ram = PALETTE_RAM0_BASE_ADDR;
 
 	for (int i = 0; i < 4; i++) {
@@ -278,16 +285,28 @@ int main(void) {
 				REG32(&tex_ram[index]) = value;
 			}
 		}
-	}
+	}*/
+
+	printf("%08x\n", REG32(PALETTE_RAM0_BASE_ADDR));
 
 	REG32(HDMI_CTRL_FBID(0)) = 0u;
 	REG32(HDMI_CTRL_CTRL(0)) =
 		(1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
 		| (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
 
+	printf("Press Enter to start...");
+	ibuf_getc();
+
 	frame_start = cycle_count();
+	init = frame_start;
 	while (1) {
 		uint32_t frame_cycles;
+
+		uint32_t frameid = ((frame_start - init) / 2500000) % 3110;
+
+		memcpy_dma(TEXTURE_RAM0_BASE_ADDR, VIDEO_MEM_BASE + (frameid << 12), 4096);
+
+		set_texids(0);
 
 		make_camera_matrix(camera_matrix, camera_phase, camera_eye);
 		cmd_upload_matrix(camera_matrix);
@@ -310,7 +329,7 @@ int main(void) {
 		// camera work, matrix writes, clears and rasterization are all included.
 		draw_color = (uint8_t)((draw_color + 1u) % COLOR_BUFFER_COUNT);
 		draw_depth = (uint8_t)((draw_depth + 1u) % DEPTH_BUFFER_COUNT);
-		camera_phase = (uint8_t)(camera_phase + 1u);
+		if (frame % 3 == 0) camera_phase = (uint8_t)(camera_phase + 1u);
 
 		//printf("\rPress Ctrl+C to terminate");
 	}
