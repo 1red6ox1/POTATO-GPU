@@ -23,7 +23,10 @@ module vertex_post_to_triangle2d
 
   output triangle_t triangle_o,
   output logic      out_valid_o,
-  input  logic      out_ready_i
+  input  logic      out_ready_i,
+
+  input  tlul_pkg::tl_h2d_t tl_i,
+  output tlul_pkg::tl_d2h_t tl_o
 );
 
   localparam int unsigned DEPTH_W = $clog2(FIFO_DEPTH + 1);
@@ -49,6 +52,60 @@ module vertex_post_to_triangle2d
   logic push;
   logic pop;
   logic drop_degenerate;
+
+
+  // UV Memory with TileLink interface
+
+  logic [ 5:0] triangle_uvs [2047:0] = '{default: 6'h6}; // 00|01|10
+
+  logic        tl_req;
+  logic        tl_we;
+  logic [10:0] tl_addr;
+  logic [31:0] tl_wdata;
+  logic [31:0] tl_rdata;
+  logic [ 5:0] tl_uv_read;
+  logic        tl_rvalid;
+
+  logic [ 5:0] tri_uv_read;
+
+  tlul_adapter_sram #(
+    .SramAw     (11),
+    .SramDw     (32)
+  ) tl_adapter_i (
+    .clk_i,
+    .rst_ni,
+    .tl_i,
+    .tl_o,
+
+    .req_o   (tl_req),
+    .gnt_i   ('1),
+    .we_o    (tl_we),
+    .addr_o  (tl_addr),
+    .wdata_o (tl_wdata),
+    .wmask_o (),
+    .rdata_i ({26'h0, tl_uv_read}),
+    .rvalid_i(tl_rvalid),
+    .rerror_i('0)
+  );
+
+  always @(posedge clk_i, negedge rst_ni) begin
+      if (!rst_ni) begin
+        tl_rvalid <= '0;
+        tl_uv_read <= '0;
+      end else begin
+        tl_rvalid <= tl_req && !tl_we;
+        tl_uv_read <= triangle_uvs[tl_addr];
+      end
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (tl_req && tl_we) begin
+      triangle_uvs[tl_addr] <= tl_wdata;
+    end
+  end
+
+  assign tri_uv_read = triangle_uvs[triangle_id_i];
+
 
   assign triangle_o = fifo_q[rptr_q];
   assign out_valid_o = depth_q != '0;
@@ -96,22 +153,22 @@ module vertex_post_to_triangle2d
       ax: x[0],
       ay: y[0],
       az: z_depth[0],
-      auq: '0,
-      avq: '0,
+      auq: tri_uv_read[5] ? q[0] : '0,
+      avq: tri_uv_read[4] ? q[0] : '0,
       aq: q[0],
 
       bx: x[1],
       by: y[1],
       bz: z_depth[1],
-      buq: q[1],
-      bvq: '0,
+      buq: tri_uv_read[3] ? q[1] : '0,
+      bvq: tri_uv_read[2] ? q[1] : '0,
       bq: q[1],
 
       cx: x[2],
       cy: y[2],
       cz: z_depth[2],
-      cuq: '0,
-      cvq: q[2],
+      cuq: tri_uv_read[1] ? q[2] : '0,
+      cvq: tri_uv_read[0] ? q[2] : '0,
       cq: q[2]
     };
 

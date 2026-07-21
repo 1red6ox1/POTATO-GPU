@@ -1,7 +1,9 @@
-module texture_memory #(
+module texture_memory
+	import tlul_pkg::*;
+#(
 	parameter int unsigned TextureWidth  = 32,
 	parameter int unsigned TextureHeight = 32,
-	parameter int unsigned TextureCount  = 30,
+	parameter int unsigned TextureCount  = 32,
 	parameter int unsigned TextureSeed   = 32'h71c3a95d
 ) (
 	input logic clk_i,
@@ -17,7 +19,10 @@ module texture_memory #(
 	output logic [rasterizer_pkg::TILE_WIDTH-1:0][7:0]                    texel_o,
 	output logic [rasterizer_pkg::TRIANGLE_ID_WIDTH-1:0]                  triangle_id_o,
 	output logic                                                           out_valid_o,
-	input  logic                                                           out_ready_i
+	input  logic                                                           out_ready_i,
+
+	input  tl_h2d_t tl_i,
+	output tl_d2h_t tl_o
 );
 
 	import rasterizer_pkg::*;
@@ -27,61 +32,6 @@ module texture_memory #(
 	localparam int unsigned MEMORY_DEPTH = TextureCount * TextureWidth * TextureHeight;
 	localparam int unsigned ADDRESS_WIDTH = $clog2(MEMORY_DEPTH);
 	localparam int unsigned MEMORY_COUNT = TILE_WIDTH / 2;
-
-	// CC0 32x32 N64-style brick texture by n64guy, converted to RGB332.
-	// Every row is stored right-to-left so [8 * u +: 8] reads left-to-right.
-	localparam logic [255:0] TEXTURE_DATA [0:31] = '{
-		256'h926d929292929292926d6d49494949496d6d926d6d6d6d6d6d6d6d6d6d6d926d,
-		256'hdbdbdbb649dbdbb6db92926d9292b66d9292929292b6929292929292929292db,
-		256'hdbdbdbb6dbb6dbdbdbdb92dbffffdb926ddbb6ffdbdbb6dbb6dbdbdbdbdbdbdb,
-		256'hdbffffffffffffffffffffffffdbdb926db6b6ffdbffffdbffffffffdbdbb6db,
-		256'hdbdbb6dbdbdbdbdb6ddbdbdbffffdb926d92dbdbdbdbdbdbdbb6dbdbdbdbdbdb,
-		256'hdbdbdbb6dbdbdb6ddbdbdbdbdbffdb926d92dbdbdbdbdbdbdbdbdbdbdbb6b6b6,
-		256'hdbb6b6dbdbdb6ddbdbdbdbdbdbdbdb926d92dbdbdbdbdbdbdbdbdbdbdbdbdbdb,
-		256'hb6dbdbdb6ddb6d6ddbdbdbdbdbdbdb494992dbdbdbdbdbdbdbdbdbdbdbdbdbdb,
-		256'hdbdbdbdbdb6ddbdbdbdbdbdbdbdbdb922492dbdbdbdbdbdbdbdbdbdbdbdbb6db,
-		256'hdbdbdbdbdbdbdbdbdbdbdbdbdbdbdb922492b6dbdbdbdbdbdbdbdbdbdbdbdbdb,
-		256'hdbdbdbdbdbdbdbdbb6dbdbb6dbffdb494992b6dbb6dbdbdbdbdbdbdbdbdbdbb6,
-		256'hdbdbb6dbdbdbdbdbdbdbdbdbffffb6006d92b6dbdbdbdbdbdbdbdbdbdbdbdbdb,
-		256'hffffffffffffffdbffdbffffffff49499292dbffffffffffffffffffffffffdb,
-		256'hdbdbdbdbdbdbdbdbdbdbdbffff6d49496d6ddbdbdbffb6dbdbdbdbdbdbdbb6b6,
-		256'hdbb6db6db6b6dbb6db6d6d496d92926d6d922424dbb6dbb6b6dbdbdbdbdbdbdb,
-		256'h6db692926d6d929292926d926db692926ddb24b6b6dbb6b649b692926d929292,
-		256'h24496d929292b69292b6b6db9292b6926d929292926d6db6dbb69292dbb69292,
-		256'h49b6b6b6b6dbdbb6dbb6dbdbdbdbdbdbdbdbffffdbdbdbb6dbdbdbdbb6db926d,
-		256'h4992b6dbdbdbb6dbdbdbdbdbdbdbdbdbdbffffffffdbdbdbdbdbdbdbdbdbdb92,
-		256'h92b6dbffffffffdbdbdbdbdbdbdbdbdbdbdbdbdbdbffffffdbdbdbdbffffb6b6,
-		256'h6d6ddbdbdbdbffdbdbdbdbdbdbdbdbdbdbdbdb6ddbdbdbdbdbdbdbdbffffdb92,
-		256'h6d9292dbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbffdbdb92,
-		256'h6d92dbb6dbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdb6ddbdbdbdbdbdbdbffdbdb92,
-		256'h6d92dbb6dbdbdbdbdbdbdbdbdbdbdbdbdb6ddb6ddbdbdbdbdbdbdbdbffdbb66d,
-		256'h6d92dbdbdbdb6ddbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbffdb926d,
-		256'h6d92dbdbdbdbdbb6db6ddbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbffdbb692,
-		256'h6d92dbdbdbdbb6dbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbffff926d,
-		256'h92b6dbdbdbdbdbdbdbdbdbdbdbdbdbdbdbdbb6b6dbdbdbdbdbdbdbffffdbdb49,
-		256'h92b6ffb6dbdbb6dbb6dbdbdbdbdbdbdbdbdbdbdbffdbffffffffffffffdbdb00,
-		256'h6db6dbdbdbdbdb24dbffffffffdbdbffdbffffffffffffffdbffffdbffdbdb24,
-		256'h6d6ddbdbb6dbb6b649b6b6dbdbdbb66d49b692dbb6b6b6dbdbdbdbdbdbdbdb24,
-		256'h6d926d6d926d9249006d6d926d9249929249926d92b6b6b6b69292929292496d
-	};
-
-	function automatic logic [7:0] make_random_texel(
-		input int unsigned texture_number,
-		input int unsigned u,
-		input int unsigned v
-	);
-		logic [31:0] random;
-
-		random = TextureSeed;
-		random = random ^ 32'(texture_number * 32'h9e3779b9);
-		random = random ^ 32'(u * 32'h85ebca6b);
-		random = random ^ 32'(v * 32'hc2b2ae35);
-		random = random ^ (random >> 13);
-		random = random * 32'h5bd1e995;
-		random = random ^ (random >> 15);
-
-		make_random_texel = random[7:0];
-	endfunction
 
 	logic [TILE_WIDTH-1:0][ADDRESS_WIDTH-1:0] read_address;
 	logic [TEXTURE_NUMBER_WIDTH-1:0] texture_number;
@@ -118,31 +68,65 @@ module texture_memory #(
 		end
 	end
 
+	// Texture DPRAM with TileLink access
+
+	logic                     tl_req;
+	logic                     tl_we;
+	logic [ADDRESS_WIDTH-1:0] tl_addr;
+	logic [             31:0] tl_wdata;
+	logic [             31:0] tl_rdata;
+	logic                     tl_rvalid;
+
+	tlul_adapter_sram #(
+		.SramAw     (ADDRESS_WIDTH),
+		.SramDw     (32)
+	) tex_adapter_i (
+		.clk_i,
+		.rst_ni,
+		.tl_i,
+		.tl_o,
+
+		.req_o   (tl_req),
+		.gnt_i   (!in_valid_i),
+		.we_o    (tl_we),
+		.addr_o  (tl_addr),
+		.wdata_o (tl_wdata),
+		.wmask_o (),
+		.rdata_i ({24'h0, texel_o[0]}),
+		.rvalid_i(tl_rvalid),
+		.rerror_i('0)
+	);
+
+	always @(posedge clk_i, negedge rst_ni) begin
+	    if (!rst_ni) begin
+	      tl_rvalid <= '0;
+	    end else begin
+	      tl_rvalid <= tl_req && !in_valid_i && !tl_we;
+	    end
+	end
+
 	for (genvar memory = 0; memory < MEMORY_COUNT; memory++) begin : gen_texture_memory
-		(* ram_style = "block" *) logic [7:0] texture [0:MEMORY_DEPTH-1];
 
-		initial begin
-			for (int texture_number = 0; texture_number < TextureCount; texture_number++) begin
-				for (int v = 0; v < TextureHeight; v++) begin
-					for (int u = 0; u < TextureWidth; u++) begin
-						if (texture_number == 0) begin
-							texture[(texture_number * TextureHeight + v) * TextureWidth + u]
-								= TEXTURE_DATA[v][8 * u +: 8];
-						end else begin
-							texture[(texture_number * TextureHeight + v) * TextureWidth + u]
-								= make_random_texel(texture_number, u, v);
-						end
-					end
-				end
-			end
-		end
+		// TL-UL channel for Texture DPRAM access can only be used when in_valid_i is 0,
+		// i.e. when there is currently no ongoing rasterization.
 
-		always_ff @(posedge clk_i) begin
-			if (in_valid_i && in_ready_o) begin
-				texel_o[2 * memory]     <= texture[read_address[2 * memory]];
-				texel_o[2 * memory + 1] <= texture[read_address[2 * memory + 1]];
-			end
-		end
+		dpram #(
+			.DATA_WIDTH(8),
+			.DEPTH     (MEMORY_DEPTH),
+			.ADDR_WIDTH(ADDRESS_WIDTH)
+		) tex_dpram_i (
+			.clk_i    (clk_i),
+
+			.rw_addr_i(in_valid_i ? read_address[2 * memory] : tl_addr),
+			.rw_en_i  (in_valid_i ? in_valid_i && in_ready_o : tl_req),
+			.rw_we_i  (in_valid_i ? '0 : tl_we),
+			.rw_data_i(in_valid_i ? '0 : tl_wdata),
+			.rw_data_o(texel_o[2 * memory]),
+
+			.r_addr_i(read_address[2 * memory + 1]),
+			.r_en_i  (in_valid_i && in_ready_o),
+			.r_data_o(texel_o[2 * memory + 1])
+		);
 	end
 
 `ifndef SYNTHESIS

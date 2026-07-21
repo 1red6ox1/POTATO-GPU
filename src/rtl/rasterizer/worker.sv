@@ -23,6 +23,11 @@ module worker (
 	output logic out_valid_o,
 	input  logic out_ready_i,
 
+	input  tlul_pkg::tl_h2d_t tl_tex_i,
+	output tlul_pkg::tl_d2h_t tl_tex_o,
+	input  tlul_pkg::tl_h2d_t tl_palette_i,
+	output tlul_pkg::tl_d2h_t tl_palette_o,
+
 	output rvlab_ddr_pkg::ddr3_h2d_t ddr1_o,
 	input  rvlab_ddr_pkg::ddr3_d2h_t ddr1_i,
 	output rvlab_ddr_pkg::ddr3_h2d_t ddr2_o,
@@ -243,7 +248,9 @@ module worker (
 		.texel_o      (texel),
 		.triangle_id_o(texture_triangle_id),
 		.out_valid_o  (texture_valid),
-		.out_ready_i  (texture_output_ready)
+		.out_ready_i  (texture_output_ready),
+		.tl_i         (tl_tex_i),
+		.tl_o         (tl_tex_o)
 	);
 
 	texture_palette texture_palette_i (
@@ -258,7 +265,9 @@ module worker (
 		.blue_o       (blue),
 		.triangle_id_o(palette_triangle_id),
 		.out_valid_o  (palette_valid),
-		.out_ready_i  (palette_output_ready)
+		.out_ready_i  (palette_output_ready),
+		.tl_i         (tl_palette_i),
+		.tl_o         (tl_palette_o)
 	);
 
 	output_fifo output_fifo_i (

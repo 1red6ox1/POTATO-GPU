@@ -30,7 +30,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 9;
+  localparam int N = 12;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -313,6 +313,10 @@ module student (
 		.mask_o          (worker_mask),
 		.out_valid_o     (worker_valid),
 		.out_ready_i     (worker_ready),
+    .tl_tex_i        (tl_devices_h2d[9]),
+    .tl_tex_o        (tl_devices_d2h[9]),
+    .tl_palette_i    (tl_devices_h2d[10]),
+    .tl_palette_o    (tl_devices_d2h[10]),
 		.ddr1_o          (xbar_reqs[3]),
 		.ddr1_i          (xbar_rsps[3]),
 		.ddr2_o          (xbar_reqs[4]),
@@ -454,7 +458,9 @@ module student (
     .fbid_depth_i(vertex_fbid_depth),
     .triangle_o  (vertex_triangle),
     .out_valid_o (vertex_triangle_valid),
-    .out_ready_i (vertex_triangle_ready)
+    .out_ready_i (vertex_triangle_ready),
+    .tl_i        (tl_devices_h2d[11]),
+    .tl_o        (tl_devices_d2h[11])
   );
 
   /* Cache / DDR3 system */

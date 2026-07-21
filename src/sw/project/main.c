@@ -19,7 +19,7 @@
 #define BACKGROUND_COLOR 0x02040cu
 #define TRIANGLE_ID_MASK  0x7ffu
 
-#define CAMERA_RADIUS  (5 * FIXED_ONE)
+#define CAMERA_RADIUS  (4 * FIXED_ONE)
 #define CAMERA_HEIGHT  (2 * FIXED_ONE)
 #define CAMERA_BOB     (FIXED_ONE / 2)
 #define CAMERA_NEAR    (FIXED_ONE / 4)
@@ -32,10 +32,15 @@ typedef struct {
 	fixed_t z;
 } vertex_t;
 
+/* UV descriptor: 6 bit value describing UV coordinates of a triangle*/
+typedef uint8_t uv_desc_t;
+
 typedef struct {
 	uint8_t a;
 	uint8_t b;
 	uint8_t c;
+	uv_desc_t uv;
+	uint8_t texid;
 } triangle_t;
 
 static const vertex_t cube_vertices[8] = {
@@ -50,12 +55,12 @@ static const vertex_t cube_vertices[8] = {
 };
 
 static const triangle_t cube_triangles[TRIANGLE_COUNT] = {
-	{0, 1, 2}, {0, 3, 2},
-	{4, 5, 6}, {4, 7, 6},
-	{0, 3, 7}, {0, 4, 7},
-	{1, 5, 6}, {6, 2, 1},
-	{0, 4, 5}, {0, 5, 1},
-	{3, 2, 6}, {3, 7, 6},
+	{0, 2, 3, 0b001110, 0}, {0, 1, 2, 0b000111, 0},
+	{5, 7, 6, 0b001110, 1}, {5, 4, 7, 0b000111, 1},
+	{4, 3, 7, 0b001110, 2}, {4, 0, 3, 0b000111, 2},
+	{1, 6, 2, 0b001110, 3}, {1, 5, 6, 0b000111, 3},
+	{1, 4, 5, 0b001110, 4}, {1, 0, 4, 0b000111, 4},
+	{6, 3, 2, 0b001110, 5}, {6, 7, 3, 0b000111, 5},
 };
 
 static uint32_t cycle_count(void) {
@@ -88,9 +93,9 @@ static uint32_t vertex_address(
 
 static void cmd_upload_geometry(void) {
 	for (uint32_t triangle = 0; triangle < TRIANGLE_COUNT; triangle++) {
-		const triangle_t *indices = &cube_triangles[triangle];
+		const triangle_t *tri = &cube_triangles[triangle];
 		const uint8_t vertex_indices[3] = {
-			indices->b, indices->a, indices->c
+			tri->a, tri->b, tri->c
 		};
 
 		for (uint32_t vertex = 0; vertex < 3; vertex++) {
@@ -102,8 +107,8 @@ static void cmd_upload_geometry(void) {
 			REG32(vertex_address(triangle, vertex, 3)) = FIXED_ONE;
 		}
 
-		REG32(LOAD_TEXTURE0_BASE_ADDR
-		      + ((triangle & TRIANGLE_ID_MASK) << 2)) = triangle;
+		REG32(LOAD_TEXTURE0_BASE_ADDR + ((triangle & TRIANGLE_ID_MASK) << 2)) = tri->texid;
+		REG32(UV_RAM0_BASE_ADDR + ((triangle & TRIANGLE_ID_MASK) << 2)) = tri->uv;
 	}
 
 	// The register contains the last triangle ID, not the number of triangles.
@@ -136,7 +141,7 @@ static void make_camera_matrix(
 ) {
 	matrix_t view;
 	matrix_t projection;
-	vec3_t center = {0, -0x00020000, 0};
+	vec3_t center = {0, 0, 0};
 	vec3_t up = {0, FIXED_ONE, 0};
 	fixed_t sin_phase = (fixed_t)(sin_q14(camera_phase) * 4);
 	fixed_t cos_phase = (fixed_t)(cos_q14(camera_phase) * 4);
@@ -240,12 +245,10 @@ int main(void) {
 
 	if (ddr_init()) {
 		printf("DDR initialization failed\n");
-		while (1) {
-		}
+		//while (1);
 	}
 
-	printf("\n=== VERTEX PROCESSOR TRIPLE-BUFFER DEMO ===\n");
-	printf("3 color buffers, 2 depth buffers, hardware completion polling\n");
+	REG32(UV_RAM0_BASE_ADDR) = 0xFF;
 
 	cmd_upload_geometry();
 
@@ -254,6 +257,27 @@ int main(void) {
 	}
 	for (uint8_t buffer = 0; buffer < DEPTH_BUFFER_COUNT; buffer++) {
 		cmd_clear_depth(buffer);
+	}
+
+	uint32_t *tex_ram = TEXTURE_RAM0_BASE_ADDR;
+	uint32_t *palette_ram = PALETTE_RAM0_BASE_ADDR;
+
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			for (int k = 0; k < 4; k++) {
+				REG32(&palette_ram[16*i+4*j+k]) = (i << 22) | (j << 14) | (k << 6);
+			}
+		}
+	}
+
+	for (int tex = 0; tex < 30; tex++) {
+		for (int u = 0; u < 32; u++) {
+			for (int v = 0; v < 32; v++) {
+				uint32_t index = (tex << 10) | (u << 5) | v;
+				uint8_t value = (tex % 4 << 4) | ((u >> 3) << 2) | (v >> 3);
+				REG32(&tex_ram[index]) = value;
+			}
+		}
 	}
 
 	REG32(HDMI_CTRL_FBID(0)) = 0u;
@@ -287,5 +311,7 @@ int main(void) {
 		draw_color = (uint8_t)((draw_color + 1u) % COLOR_BUFFER_COUNT);
 		draw_depth = (uint8_t)((draw_depth + 1u) % DEPTH_BUFFER_COUNT);
 		camera_phase = (uint8_t)(camera_phase + 1u);
+
+		//printf("\rPress Ctrl+C to terminate");
 	}
 }

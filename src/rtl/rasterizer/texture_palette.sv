@@ -12,7 +12,10 @@ module texture_palette (
 	output logic [255:0]                                  blue_o,
 	output logic [rasterizer_pkg::TRIANGLE_ID_WIDTH-1:0] triangle_id_o,
 	output logic                                           out_valid_o,
-	input  logic                                           out_ready_i
+	input  logic                                           out_ready_i,
+
+	input  tlul_pkg::tl_h2d_t tl_i,
+	output tlul_pkg::tl_d2h_t tl_o
 );
 
 	import rasterizer_pkg::*;
@@ -50,37 +53,61 @@ module texture_palette (
 		end
 	end
 
+	// Palette DPRAM with TileLink access
+
+	logic                             tl_req;
+	logic                             tl_we;
+	logic [$clog2(PALETTE_DEPTH)-1:0] tl_addr;
+	logic [                     31:0] tl_wdata;
+	logic [                     31:0] tl_rdata;
+	logic                             tl_rvalid;
+
+	tlul_adapter_sram #(
+		.SramAw     ($clog2(PALETTE_DEPTH)),
+		.SramDw     (32)
+	) tex_adapter_i (
+		.clk_i,
+		.rst_ni,
+		.tl_i,
+		.tl_o,
+
+		.req_o   (tl_req),
+		.gnt_i   (!in_valid_i),
+		.we_o    (tl_we),
+		.addr_o  (tl_addr),
+		.wdata_o (tl_wdata),
+		.wmask_o (),
+		.rdata_i ({24'h0, color_q[0]}),
+		.rvalid_i(tl_rvalid),
+		.rerror_i('0)
+	);
+
+	always @(posedge clk_i, negedge rst_ni) begin
+	    if (!rst_ni) begin
+	      tl_rvalid <= '0;
+	    end else begin
+	      tl_rvalid <= tl_req && !in_valid_i && !tl_we;
+	    end
+	end
+
 	for (genvar memory = 0; memory < MEMORY_COUNT; memory++) begin : gen_texture_palette
-		(* ram_style = "block" *) logic [23:0] palette [0:PALETTE_DEPTH-1];
+		dpram #(
+			.DATA_WIDTH(24),
+			.DEPTH     (PALETTE_DEPTH),
+			.ADDR_WIDTH($clog2(PALETTE_DEPTH))
+		) palette_dpram_i (
+			.clk_i,
 
-		initial begin
-			for (int index = 0; index < PALETTE_DEPTH; index++) begin
-				logic [7:0] red;
-				logic [7:0] green;
-				logic [7:0] blue;
+			.rw_addr_i(in_valid_i ? index_i[2 * memory] : tl_addr),
+			.rw_en_i  (in_valid_i ? in_valid_i && in_ready_o : tl_req),
+			.rw_we_i  (in_valid_i ? '0 : tl_we),
+			.rw_data_i(in_valid_i ? '0 : tl_wdata),
+			.rw_data_o(color_q[2 * memory]),
 
-				red   = {index[7:5], index[7:5], index[7:6]};
-				green = {index[4:2], index[4:2], index[4:3]};
-				blue  = {index[1:0], index[1:0], index[1:0], index[1:0]};
-
-				if (index[4:2] == index[7:5]
-					&& index[1:0] == index[7:6]) begin
-					green = red;
-					blue  = red;
-				end
-
-				palette[index] = {red, green, blue};
-			end
-		end
-
-		always_ff @(posedge clk_i) begin
-			if (in_valid_i && in_ready_o) begin
-				color_q[2 * memory]
-					<= palette[index_i[2 * memory]];
-				color_q[2 * memory + 1]
-					<= palette[index_i[2 * memory + 1]];
-			end
-		end
+			.r_addr_i(index_i[2 * memory + 1]),
+			.r_en_i  (in_valid_i && in_ready_o),
+			.r_data_o(color_q[2 * memory + 1])
+		);
 	end
 
 `ifndef SYNTHESIS
