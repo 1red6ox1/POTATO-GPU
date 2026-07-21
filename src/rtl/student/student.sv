@@ -30,7 +30,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 8;
+  localparam int N = 9;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -173,9 +173,9 @@ module student (
 	logic [rasterizer_pkg::TILE_WIDTH-1:0] worker_mask;
 	logic worker_valid;
 	logic worker_ready;
+	logic rasterizer_writer_valid;
+	logic rasterizer_writer_ready;
 	logic writer_busy;
-	logic triangle_rasrized;
-	logic [rasterizer_pkg::TRIANGLE_ID_WIDTH-1:0] triangle_rasrized_id;
 
   triangle_input triangle_input_i (
     .clk_i,
@@ -186,9 +186,7 @@ module student (
 	    .fbid_depth_o(vertex_fbid_depth),
 	    .triangle_o (software_triangle),
 	    .out_valid_o(software_triangle_valid),
-	    .out_ready_i(software_triangle_ready),
-	    .triangle_rasrized_i(triangle_rasrized),
-	    .triangle_rasrized_id_i(triangle_rasrized_id)
+	    .out_ready_i(software_triangle_ready)
   );
 
   assign triangle = vertex_triangle_valid ? vertex_triangle : software_triangle;
@@ -236,9 +234,7 @@ module student (
 	  .tile_y_o    (tile_y),
 		  .param_o     (tile_param),
 		  .out_valid_o (tile_valid),
-		  .out_ready_i (tile_ready),
-		  .triangle_rasrized_o(triangle_rasrized),
-		  .triangle_rasrized_id_o(triangle_rasrized_id)
+		  .out_ready_i (tile_ready)
 	  );
 
 	tile_reject tile_reject_i (
@@ -323,6 +319,19 @@ module student (
 		.ddr2_i          (xbar_rsps[4])
 	);
 
+	rasterizer_status rasterizer_status_i (
+		.clk_i,
+		.rst_ni,
+		.tl_i          (tl_devices_h2d[8]),
+		.tl_o          (tl_devices_d2h[8]),
+		.triangle_id_i (triangle_id),
+		.in_valid_i    (worker_valid),
+		.in_ready_o    (worker_ready),
+		.out_valid_o   (rasterizer_writer_valid),
+		.out_ready_i   (rasterizer_writer_ready),
+		.writer_busy_i (writer_busy)
+	);
+
 	writer writer_i (
 		.clk_i,
 		.rst_ni,
@@ -336,8 +345,8 @@ module student (
 		.depth1_i     (worker_depth1),
 		.depth2_i     (worker_depth2),
 		.mask_i       (worker_mask),
-		.in_valid_i   (worker_valid),
-		.in_ready_o   (worker_ready),
+		.in_valid_i   (rasterizer_writer_valid),
+		.in_ready_o   (rasterizer_writer_ready),
 		.busy_o       (writer_busy),
 		.ddr_o        (xbar_reqs[5]),
 		.ddr_i        (xbar_rsps[5])
@@ -347,11 +356,11 @@ module student (
 
   logic                         vertex_out_valid;
   logic                         vertex_out_ready;
-  logic [9:0]                   vertex_out_id;
+  logic [10:0]                  vertex_out_id;
   logic signed [31:0]           vertex_out_vec [3:0];
   logic                         vertex_post_in_valid;
   logic                         vertex_post_ready;
-  logic [9:0]                   vertex_post_in_id;
+  logic [10:0]                  vertex_post_in_id;
   logic signed [31:0]           vertex_post_x [2:0];
   logic signed [31:0]           vertex_post_y [2:0];
   logic signed [31:0]           vertex_post_z [2:0];
@@ -364,7 +373,7 @@ module student (
   logic [10:0]                  vertex_post_triangle_id;
   logic                         vertex_post_to_triangle2d_ready;
   (* mark_debug = "true" *)
-  logic [138:0]                 vertex_debug;
+  logic [139:0]                 vertex_debug;
 
   assign vertex_debug = {
     vertex_out_valid,
@@ -390,7 +399,9 @@ module student (
     .out_vec_o  (vertex_out_vec)
   );
 
-  vertex_triangle_collector vertex_triangle_collector_i (
+  vertex_triangle_collector #(
+    .TRI_ID_WIDTH(11)
+  ) vertex_triangle_collector_i (
     .clk_i,
     .rst_ni,
 
@@ -417,7 +428,7 @@ module student (
     .y_i        (vertex_post_y),
     .z_i        (vertex_post_z),
     .w_i        (vertex_post_w),
-    .tri_id_i   ({1'b0, vertex_post_in_id}),
+    .tri_id_i   (vertex_post_in_id),
     .out_valid  (vertex_post_out_valid),
     .out_ready_i(vertex_post_to_triangle2d_ready),
     .sx_o       (vertex_post_sx),

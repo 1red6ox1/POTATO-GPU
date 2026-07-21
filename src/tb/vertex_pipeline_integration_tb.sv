@@ -6,6 +6,7 @@ module vertex_pipeline_integration_tb;
 
   localparam int DATA_WIDTH = 32;
   localparam int TRI_ID_WIDTH = 10;
+  localparam int OUT_ID_WIDTH = TRI_ID_WIDTH + 1;
   localparam int VTX_ID_WIDTH = 2;
   localparam int NUM_TRIS = 12;
   localparam int NUM_VERTS = 3;
@@ -33,12 +34,12 @@ module vertex_pipeline_integration_tb;
 
   logic                         vertex_out_valid;
   logic                         vertex_out_ready;
-  logic [TRI_ID_WIDTH-1:0]      vertex_out_id;
+  logic [OUT_ID_WIDTH-1:0]      vertex_out_id;
   data_t                        vertex_out_vec [3:0];
 
   logic                         post_in_valid;
   logic                         post_in_ready;
-  logic [TRI_ID_WIDTH-1:0]      post_in_id;
+  logic [OUT_ID_WIDTH-1:0]      post_in_id;
   data_t                        post_x [2:0];
   data_t                        post_y [2:0];
   data_t                        post_z [2:0];
@@ -94,7 +95,7 @@ module vertex_pipeline_integration_tb;
 
   vertex_triangle_collector #(
     .DATA_WIDTH  (DATA_WIDTH),
-    .TRI_ID_WIDTH(TRI_ID_WIDTH)
+    .TRI_ID_WIDTH(OUT_ID_WIDTH)
   ) vertex_triangle_collector_i (
     .clk_i(clk),
     .rst_ni      (rst_n),
@@ -127,7 +128,7 @@ module vertex_pipeline_integration_tb;
     .y_i       (post_y),
     .z_i       (post_z),
     .w_i       (post_w),
-    .tri_id_i    ({1'b0, post_in_id}),
+    .tri_id_i    (post_in_id),
     .out_valid   (post_out_valid),
     .out_ready_i (adapter_ready),
     .sx_o        (post_sx),
@@ -437,9 +438,27 @@ module vertex_pipeline_integration_tb;
       cycle_count <= cycle_count + 1;
 
       if (triangle2d_valid && triangle2d_ready) begin
-        if (triangle2d_count >= NUM_TRIS) begin
+        if (triangle2d_count > NUM_TRIS) begin
           $error("unexpected extra triangle2d output");
           errcnt++;
+        end else if (triangle2d_count == NUM_TRIS) begin
+          if (triangle2d.triangle_id !== {TRIANGLE_ID_WIDTH{1'b1}}
+              || triangle2d.ax !== COORD_WIDTH'(960)
+              || triangle2d.ay !== COORD_WIDTH'(540)
+              || triangle2d.bx !== COORD_WIDTH'(963)
+              || triangle2d.by !== COORD_WIDTH'(540)
+              || triangle2d.cx !== COORD_WIDTH'(960)
+              || triangle2d.cy !== COORD_WIDTH'(542)
+              || triangle2d.az !== {DEPTH_WIDTH{1'b1}}
+              || triangle2d.bz !== {DEPTH_WIDTH{1'b1}}
+              || triangle2d.cz !== {DEPTH_WIDTH{1'b1}}) begin
+            $error("completion triangle mismatch: id=%0d A(%0d,%0d) B(%0d,%0d) C(%0d,%0d)",
+                   triangle2d.triangle_id,
+                   triangle2d.ax, triangle2d.ay,
+                   triangle2d.bx, triangle2d.by,
+                   triangle2d.cx, triangle2d.cy);
+            errcnt++;
+          end
         end else begin
           check_triangle2d(triangle2d, triangle2d_count);
         end
@@ -475,21 +494,21 @@ module vertex_pipeline_integration_tb;
     repeat (300) @(posedge clk);
     raster_param_ready = 1'b1;
 
-    while (raster_param_count < NUM_TRIS && cycle_count < 5000) begin
+    while (raster_param_count < NUM_TRIS + 1 && cycle_count < 5000) begin
       @(posedge clk);
     end
 
     repeat (20) @(posedge clk);
 
-    if (triangle2d_count !== NUM_TRIS) begin
+    if (triangle2d_count !== NUM_TRIS + 1) begin
       $error("triangle2d output count mismatch: expected %0d got %0d",
-             NUM_TRIS, triangle2d_count);
+             NUM_TRIS + 1, triangle2d_count);
       errcnt++;
     end
 
-    if (raster_param_count !== NUM_TRIS) begin
+    if (raster_param_count !== NUM_TRIS + 1) begin
       $error("raster_param output count mismatch: expected %0d got %0d",
-             NUM_TRIS, raster_param_count);
+             NUM_TRIS + 1, raster_param_count);
       errcnt++;
     end
 

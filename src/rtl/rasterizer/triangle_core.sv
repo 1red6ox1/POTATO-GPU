@@ -10,10 +10,7 @@ module triangle_core (
 	output logic [rasterizer_pkg::TILE_Y_WIDTH-1:0] tile_y_o,
 	output rasterizer_pkg::triangle_param_t         param_o,
 	output logic                    out_valid_o,
-	input  logic                    out_ready_i,
-	
-	output logic triangle_rasrized_o,
-	output logic [rasterizer_pkg::TRIANGLE_ID_WIDTH-1:0] triangle_rasrized_id_o
+	input  logic                    out_ready_i
 );
 
 	import rasterizer_pkg::*;
@@ -28,23 +25,18 @@ module triangle_core (
 	assign tile_x_o = tile_x_q;
 	assign tile_y_o = tile_y_q;
 	assign param_o  = param_q;
-	assign triangle_rasrized_id_o = param_q.triangle_id;
 
 	always_ff @(posedge clk_i or negedge rst_ni) begin
 		if (~rst_ni) begin
-			in_ready_o          <= 1'b1;
-			out_valid_o         <= 1'b0;
-			triangle_rasrized_o <= 1'b0;
+			in_ready_o  <= 1'b1;
+			out_valid_o <= 1'b0;
 		end else begin
-			triangle_rasrized_o <= 1'b0;
-
 			if (in_valid_i && in_ready_o) begin
 				in_ready_o  <= 1'b0;
 				out_valid_o <= 1'b1;
 			end else if (out_valid_o && out_ready_i && tile_x_q == bbox_max_x_q && tile_y_q == bbox_max_y_q) begin
-				in_ready_o          <= 1'b1;
-				out_valid_o         <= 1'b0;
-				triangle_rasrized_o <= 1'b1;
+				in_ready_o  <= 1'b1;
+				out_valid_o <= 1'b0;
 			end
 		end
 	end

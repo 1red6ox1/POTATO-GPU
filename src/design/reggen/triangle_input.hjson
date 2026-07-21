@@ -12,22 +12,6 @@
       fields: [{bits: "0", name: "valid", desc: "Submitted triangle is pending"}]
     }
     {
-      name: "rasterized_count"
-      desc: "Number of triangles whose final bounding-box tile was accepted by the rasterizer pipeline"
-      swaccess: "ro"
-      hwaccess: "hwo"
-      hwext: "true"
-      fields: [{bits: "31:0", name: "val", desc: "Rasterized triangle completion count"}]
-    }
-    {
-      name: "rasterized_triangle_id"
-      desc: "Triangle ID associated with the latest rasterized completion"
-      swaccess: "ro"
-      hwaccess: "hwo"
-      hwext: "true"
-      fields: [{bits: "31:0", name: "val", desc: "Latest rasterized triangle ID"}]
-    }
-    {
       name: "submit"
       desc: "Write one to submit the triangle registers"
       swaccess: "wo"

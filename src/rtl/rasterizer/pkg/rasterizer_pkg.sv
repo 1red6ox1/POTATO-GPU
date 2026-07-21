@@ -19,6 +19,7 @@ package rasterizer_pkg;
 	localparam int unsigned FRAME_Y_WIDTH = $clog2(FRAME_HEIGHT);
 	localparam int unsigned TRIANGLE_ID_WIDTH = 11;
 	localparam int unsigned TEXTURE_ID_WIDTH = 8;
+	localparam logic [TRIANGLE_ID_WIDTH-1:0] COMPLETION_TRIANGLE_ID = '1;
 
 	typedef struct packed {
 		logic [TRIANGLE_ID_WIDTH-1:0] triangle_id;

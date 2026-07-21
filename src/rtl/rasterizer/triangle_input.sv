@@ -9,10 +9,7 @@ module triangle_input (
 	output logic [1:0]                fbid_depth_o,
 	output rasterizer_pkg::triangle_t triangle_o,
 	output logic                      out_valid_o,
-	input  logic                      out_ready_i,
-
-	input logic triangle_rasrized_i,
-	input logic [rasterizer_pkg::TRIANGLE_ID_WIDTH-1:0] triangle_rasrized_id_i
+	input  logic                      out_ready_i
 );
 
 	import triangle_input_reg_pkg::*;
@@ -32,8 +29,6 @@ module triangle_input (
 
 	import rasterizer_pkg::*;
 	triangle_t triangle_q;
-	logic [31:0] triangle_rasrized_count_q;
-	logic [TRIANGLE_ID_WIDTH-1:0] triangle_rasrized_id_q;
 	assign fbid_color_o = reg2hw.fbid_color.q;
 	assign fbid_depth_o = reg2hw.fbid_depth.q;
 	assign triangle_o = triangle_q;
@@ -74,20 +69,8 @@ module triangle_input (
 		end
 	end
 
-	always_ff @(posedge clk_i or negedge rst_ni) begin
-		if (~rst_ni) begin
-			triangle_rasrized_count_q <= '0;
-			triangle_rasrized_id_q    <= '0;
-		end else if (triangle_rasrized_i) begin
-			triangle_rasrized_count_q <= triangle_rasrized_count_q + 1'b1;
-			triangle_rasrized_id_q    <= triangle_rasrized_id_i;
-		end
-	end
-
 	assign hw2reg.status.d  = out_valid_o;
 	assign hw2reg.status.de = 1'b1;
-	assign hw2reg.rasterized_count.d = triangle_rasrized_count_q;
-	assign hw2reg.rasterized_triangle_id.d = triangle_rasrized_id_q;
 
 `ifndef SYNTHESIS
 	always @(posedge clk_i) begin
