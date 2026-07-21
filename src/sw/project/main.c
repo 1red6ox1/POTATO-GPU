@@ -136,7 +136,7 @@ static void make_camera_matrix(
 ) {
 	matrix_t view;
 	matrix_t projection;
-	vec3_t center = {0, 0, 0};
+	vec3_t center = {0, -0x00020000, 0};
 	vec3_t up = {0, FIXED_ONE, 0};
 	fixed_t sin_phase = (fixed_t)(sin_q14(camera_phase) * 4);
 	fixed_t cos_phase = (fixed_t)(cos_q14(camera_phase) * 4);
@@ -225,6 +225,10 @@ static void report_fps(
 	);
 }
 
+uint32_t last_frame;
+
+char fps_display[20];
+
 int main(void) {
 	matrix_t camera_matrix;
 	vec3_t camera_eye;
@@ -272,13 +276,11 @@ int main(void) {
 		frame++;
 		frame_cycles = cycle_count() - frame_start;
 		frame_start = cycle_count();
-		/*report_fps(
-			frame,
-			frame_cycles,
-			draw_color,
-			draw_depth,
-			camera_eye
-		);*/
+
+		uint32_t fps_x10 = (CPU_CLOCK_HZ * 10) / frame_cycles;
+	    sprintf(fps_display, "FPS: %u.%u", fps_x10 / 10, fps_x10 % 10);
+	    write_string(draw_color, 0, 0, fps_display);
+        for (volatile uint8_t* x = (uint8_t*)0x90000000; x < (uint8_t*)0x90004000; x += 32) *x;
 
 		// The next timing interval starts before printf above, so printing,
 		// camera work, matrix writes, clears and rasterization are all included.
