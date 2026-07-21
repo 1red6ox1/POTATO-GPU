@@ -92,6 +92,37 @@ def indices_for_frame(rgb_frame, palette_image, dither):
     return list(p_frame.getdata())  # Pillow < 12 fallback
 
 
+def image_to_chunks(image_path, num_colors=256, dither=False,
+                    image_size=(128, 128), chunk_size=32):
+    if image_size[0] % chunk_size != 0 or image_size[1] % chunk_size != 0:
+        raise ValueError("image_size must be evenly divisible by chunk_size")
+
+    im = Image.open(image_path).convert("RGBA")
+    resized = im.resize(image_size, Image.LANCZOS)
+    rgb = flatten_alpha(resized)
+
+    palette, palette_image = build_global_palette([rgb], num_colors)
+
+    full_indices = indices_for_frame(rgb, palette_image, dither)
+
+    width, height = image_size
+    cols = width // chunk_size
+    rows = height // chunk_size
+
+    chunks = []
+    for chunk_row in range(rows):
+        for chunk_col in range(cols):
+            chunk_indices = []
+            base_y = chunk_row * chunk_size
+            base_x = chunk_col * chunk_size
+            for ly in range(chunk_size):
+                row_start = (base_y + ly) * width + base_x
+                chunk_indices.extend(full_indices[row_start:row_start + chunk_size])
+            chunks.append(chunk_indices)
+
+    return palette, chunks
+
+
 def convert_gif(input_path, size, num_colors, dither):
     frames_raw = load_composited_frames(input_path)
 

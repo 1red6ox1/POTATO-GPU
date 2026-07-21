@@ -210,35 +210,7 @@ static void cmd_render_frame(
 	         & RASTERIZER_STATUS_STATUS_VALID_MASK));
 }
 
-static void report_fps(
-	uint32_t frame,
-	uint32_t frame_cycles,
-	uint8_t color_buffer,
-	uint8_t depth_buffer,
-	vec3_t eye
-) {
-	uint32_t fps_x100 = (uint32_t)(
-		((uint64_t)CPU_CLOCK_HZ * 100u + frame_cycles / 2u)
-		/ frame_cycles
-	);
-
-	printf(
-		"frame %u: work %u cycles, fps %u.%02u, color %u, depth %u, "
-		"camera (%d, %d, %d)\r",
-		frame,
-		frame_cycles,
-		fps_x100 / 100u,
-		fps_x100 % 100u,
-		color_buffer,
-		depth_buffer,
-		eye[0],
-		eye[1],
-		eye[2]
-	);
-}
-
 uint32_t last_frame;
-
 char fps_display[20];
 
 int main(void) {
@@ -266,43 +238,17 @@ int main(void) {
 		cmd_clear_depth(buffer);
 	}
 
-	/*uint32_t *tex_ram = TEXTURE_RAM0_BASE_ADDR;
-	uint32_t *palette_ram = PALETTE_RAM0_BASE_ADDR;
-
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			for (int k = 0; k < 4; k++) {
-				REG32(&palette_ram[16*i+4*j+k]) = (i << 22) | (j << 14) | (k << 6);
-			}
-		}
-	}
-
-	for (int tex = 0; tex < 30; tex++) {
-		for (int u = 0; u < 32; u++) {
-			for (int v = 0; v < 32; v++) {
-				uint32_t index = (tex << 10) | (u << 5) | v;
-				uint8_t value = (tex % 4 << 4) | ((u >> 3) << 2) | (v >> 3);
-				REG32(&tex_ram[index]) = value;
-			}
-		}
-	}*/
-
-	printf("%08x\n", REG32(PALETTE_RAM0_BASE_ADDR));
-
 	REG32(HDMI_CTRL_FBID(0)) = 0u;
 	REG32(HDMI_CTRL_CTRL(0)) =
 		(1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
 		| (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
-
-	printf("Press Enter to start...");
-	ibuf_getc();
 
 	frame_start = cycle_count();
 	init = frame_start;
 	while (1) {
 		uint32_t frame_cycles;
 
-		uint32_t frameid = ((frame_start - init) / 2500000) % 3110;
+		uint32_t frameid = ((frame_start - init) / 2000000) % 54;
 
 		memcpy_dma(TEXTURE_RAM0_BASE_ADDR, VIDEO_MEM_BASE + (frameid << 12), 4096);
 
@@ -329,8 +275,6 @@ int main(void) {
 		// camera work, matrix writes, clears and rasterization are all included.
 		draw_color = (uint8_t)((draw_color + 1u) % COLOR_BUFFER_COUNT);
 		draw_depth = (uint8_t)((draw_depth + 1u) % DEPTH_BUFFER_COUNT);
-		if (frame % 3 == 0) camera_phase = (uint8_t)(camera_phase + 1u);
-
-		//printf("\rPress Ctrl+C to terminate");
+		camera_phase = (uint8_t)(camera_phase + 1u);
 	}
 }
