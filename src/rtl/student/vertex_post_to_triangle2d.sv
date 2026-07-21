@@ -8,22 +8,23 @@ module vertex_post_to_triangle2d
   parameter int unsigned FRAC_WIDTH = 16,
   parameter int unsigned FIFO_DEPTH = 4
 ) (
-  input  logic clk_i,
-  input  logic rst_ni,
+  input  logic        clk_i,
+  input  logic        rst_ni,
 
-  output logic in_ready_o,
-  input  logic in_valid_i,
+  output logic        in_ready_o,
+  input  logic        in_valid_i,
   input  logic [10:0] triangle_id_i,
   input  logic [10:0] sx_i [2:0],
   input  logic [10:0] sy_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] z_i [2:0],
   input  logic signed [DATA_WIDTH-1:0] inv_w_i [2:0],
-  input  logic [1:0] fbid_color_i,
-  input  logic [1:0] fbid_depth_i,
+  input  logic [1:0]  fbid_color_i,
+  input  logic [1:0]  fbid_depth_i,
 
-  output triangle_t triangle_o,
-  output logic      out_valid_o,
-  input  logic      out_ready_i
+  output triangle_t   triangle_o,
+  output logic [10:0] triangle_id_o,
+  output logic        out_valid_o,
+  input  logic        out_ready_i
 );
 
   localparam int unsigned DEPTH_W = $clog2(FIFO_DEPTH + 1);
@@ -32,6 +33,7 @@ module vertex_post_to_triangle2d
   localparam logic signed [2*COORD_WIDTH+2:0] AREA_ZERO = '0;
 
   triangle_t fifo_q [FIFO_DEPTH-1:0];
+  logic [10:0] id_fifo [FIFO_DEPTH-1:0];
   logic [$clog2(FIFO_DEPTH)-1:0] rptr_q;
   logic [$clog2(FIFO_DEPTH)-1:0] wptr_q;
   logic [DEPTH_W-1:0] depth_q;
@@ -51,6 +53,7 @@ module vertex_post_to_triangle2d
   logic drop_degenerate;
 
   assign triangle_o = fifo_q[rptr_q];
+  assign triangle_id_o = id_fifo[rptr_q];
   assign out_valid_o = depth_q != '0;
   assign in_ready_o = depth_q < DEPTH_W'(FIFO_DEPTH);
   assign pop = out_valid_o && out_ready_i;
@@ -139,10 +142,12 @@ module vertex_post_to_triangle2d
       depth_q <= '0;
       for (int i = 0; i < FIFO_DEPTH; i++) begin
         fifo_q[i] <= '0;
+        id_fifo[i] <= '0;
       end
     end else begin
       if (push) begin
         fifo_q[wptr_q] <= triangle_i;
+        id_fifo[wptr_q] <= triangle_id_i;
         if (wptr_q == $clog2(FIFO_DEPTH)'(FIFO_DEPTH - 1)) begin
           wptr_q <= '0;
         end else begin
