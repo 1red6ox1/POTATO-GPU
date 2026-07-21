@@ -76,9 +76,7 @@ module vertex_post #(
     logic signed [63:0] px;
     begin
       px = ($signed(64'(x)) + ONE_FP) * HALF_W >>> FRAC_WIDTH;
-      if (px < 0)               vp_x = '0;
-      else if (px > SCREEN_W-1) vp_x = SX_WIDTH'(SCREEN_W-1);
-      else                      vp_x = px[SX_WIDTH-1:0];
+      vp_x = px[SX_WIDTH-1:0];
     end
   endfunction
 
@@ -87,9 +85,7 @@ module vertex_post #(
     logic signed [63:0] py;
     begin
       py = (ONE_FP - $signed(64'(y))) * HALF_H >>> FRAC_WIDTH;
-      if (py < 0)               vp_y = '0;
-      else if (py > SCREEN_H-1) vp_y = SY_WIDTH'(SCREEN_H-1);
-      else                      vp_y = py[SY_WIDTH-1:0];
+      vp_y = py[SY_WIDTH-1:0];
     end
   endfunction
 
