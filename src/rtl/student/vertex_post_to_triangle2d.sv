@@ -33,7 +33,6 @@ module vertex_post_to_triangle2d
   localparam logic signed [2*COORD_WIDTH+2:0] AREA_ZERO = '0;
 
   triangle_t fifo_q [FIFO_DEPTH-1:0];
-  logic [10:0] id_fifo [FIFO_DEPTH-1:0];
   logic [$clog2(FIFO_DEPTH)-1:0] rptr_q;
   logic [$clog2(FIFO_DEPTH)-1:0] wptr_q;
   logic [DEPTH_W-1:0] depth_q;
@@ -53,7 +52,6 @@ module vertex_post_to_triangle2d
   logic drop_degenerate;
 
   assign triangle_o = fifo_q[rptr_q];
-  assign triangle_id_o = id_fifo[rptr_q];
   assign out_valid_o = depth_q != '0;
   assign in_ready_o = depth_q < DEPTH_W'(FIFO_DEPTH);
   assign pop = out_valid_o && out_ready_i;
@@ -142,12 +140,10 @@ module vertex_post_to_triangle2d
       depth_q <= '0;
       for (int i = 0; i < FIFO_DEPTH; i++) begin
         fifo_q[i] <= '0;
-        id_fifo[i] <= '0;
       end
     end else begin
       if (push) begin
         fifo_q[wptr_q] <= triangle_i;
-        id_fifo[wptr_q] <= triangle_id_i;
         if (wptr_q == $clog2(FIFO_DEPTH)'(FIFO_DEPTH - 1)) begin
           wptr_q <= '0;
         end else begin
