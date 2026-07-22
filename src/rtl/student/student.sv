@@ -30,7 +30,7 @@ module student (
   logic       tmds_clk;
   logic [2:0] tmds;
 
-  localparam int N = 9;
+  localparam int N = 10;
 
   tl_h2d_t tl_devices_h2d [N-1:0];
   tl_d2h_t tl_devices_d2h [N-1:0];
@@ -40,12 +40,34 @@ module student (
 
   assign irq_signals = {30'h0, irq_left, irq_right};
 
+  // gamepad 0 on Pmod JA pins 1-4, gamepad 1 on pins 7-10; miso pins stay
+  // inputs (oe = 0), the gamepad data line is open drain with a pull-up
+  logic gp_sclk0, gp_mosi0, gp_cs0;
+  logic gp_sclk1, gp_mosi1, gp_cs1;
+
   assign userio_o = '{
     led: led,
     hdmi_tx_clk: tmds_clk,
     hdmi_tx: tmds,
+    pmod_a_out: {1'b0, gp_cs1, gp_mosi1, gp_sclk1, 1'b0, gp_cs0, gp_mosi0, gp_sclk0},
+    pmod_a_oe:  8'b0111_0111,
     default: '0
   };
+
+  gamepad_ctrl gamepad_ctrl_i (
+    .clk_i,
+    .rst_ni,
+    .tl_i    (tl_devices_h2d[9]),
+    .tl_o    (tl_devices_d2h[9]),
+    .sclk0_o (gp_sclk0),
+    .mosi0_o (gp_mosi0),
+    .miso0_i (userio_i.pmod_a[3]),
+    .cs0_o   (gp_cs0),
+    .sclk1_o (gp_sclk1),
+    .mosi1_o (gp_mosi1),
+    .miso1_i (userio_i.pmod_a[7]),
+    .cs1_o   (gp_cs1)
+  );
 
   student_tlul_mux #(.N(N)) tlul_mux_i (
     .clk_i,

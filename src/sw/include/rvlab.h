@@ -51,6 +51,7 @@ int ddr_init(void);
 #define LOAD_TEXTURE0_BASE_ADDR 0x10700000
 #include <reggen/rasterizer_status.h>
 #define RASTERIZER_STATUS0_BASE_ADDR 0x10800000
+#define GAMEPAD_CTRL0_BASE_ADDR 0x10900000
 #define RASTERIZER_COMPLETION_TRIANGLE_ID 0x7ffu
 
 #endif // _RVLAB_H

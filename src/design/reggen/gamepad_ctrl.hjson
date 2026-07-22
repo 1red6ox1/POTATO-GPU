@@ -1,0 +1,38 @@
+{
+    name: "gamepad_ctrl"
+    clock_primary: "sys_clk"
+    bus_device: "tlul"
+    regwidth: "32"
+    registers: [
+        {
+            name: "buttons0"
+            desc: "Button state of gamepad 0, 1 = pressed, updated on every poll"
+            swaccess: "ro"
+            hwaccess: "hrw"
+            fields: [
+                {bits: "15:0", name: "buttons", desc: "button bits of gamepad 0"}
+            ]
+        }
+        {
+            name: "buttons1"
+            desc: "Button state of gamepad 1, 1 = pressed, updated on every poll"
+            swaccess: "ro"
+            hwaccess: "hrw"
+            fields: [
+                {bits: "15:0", name: "buttons", desc: "button bits of gamepad 1"}
+            ]
+        }
+        {
+            name: "status"
+            desc: '''Poll counters, one per gamepad. They increment on every
+                  successful poll (about 125 per second) and wrap. A stuck
+                  counter means the gamepad does not respond.'''
+            swaccess: "ro"
+            hwaccess: "hrw"
+            fields: [
+                {bits: "7:0",  name: "polls0", desc: "wrapping poll counter gamepad 0"}
+                {bits: "15:8", name: "polls1", desc: "wrapping poll counter gamepad 1"}
+            ]
+        }
+    ]
+}
