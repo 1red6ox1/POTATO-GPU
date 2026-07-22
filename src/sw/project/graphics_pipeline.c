@@ -58,6 +58,30 @@ void write_camera_matrix(matrix_t matrix) {
 	}
 }
 
+static uint32_t *vertex_address (tri_id_t triangle, uint32_t vertex, uint32_t lane) {
+	return (uint32_t *)(VERTEX_DATA0_BASE_ADDR
+		| (triangle << 6)
+		| (vertex << 4)
+		| (lane << 2));
+}
+
+void write_geometry(triangle_t *triangles, uint32_t count) {
+	for (uint32_t triangle = 0; triangle < count; triangle++) {
+		const triangle_t *tri = &triangles[triangle];
+		const vertex_t *positions[3] = { &tri->a, &tri->b, &tri->c };
+		for (uint32_t vertex = 0; vertex < 3; vertex++) {
+			const vertex_t *position = positions[vertex];
+			REG32(vertex_address(triangle, vertex, 0)) = position->x;
+			REG32(vertex_address(triangle, vertex, 1)) = position->y;
+			REG32(vertex_address(triangle, vertex, 2)) = position->z;
+			REG32(vertex_address(triangle, vertex, 3)) = 0x00010000;
+		}
+		set_texid(triangle, tri->texid);
+		set_uv_desc(triangle, tri->uv);
+	}
+	set_tri_count(count);
+}
+
 void enable_hdmi() {
 	REG32(HDMI_CTRL_FBID(0)) = 0u;
 	REG32(HDMI_CTRL_CTRL(0)) = (1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
@@ -117,4 +141,28 @@ void update_fps_display(buf_id_t fbid) {
 	sprintf(fps_display, "FPS: %u.%u", fps_x10 / 10, fps_x10 % 10);
 	write_string(fbid, 0, 0, fps_display);
 	_flush_ddr_llc();
+}
+
+void set_texture(texture_id_t texid, palette_id_t palid) {
+	for (int v = 0; v < 32; v++) {
+		for (int ub = 0; ub < 8; ub++) {
+			REG32(TEXTURE_RAM0_BASE_ADDR + (texid << 10) + (v << 5) + (ub << 2)) = palid * 0x01010101;
+		}
+	}
+}
+
+void set_texture_checkered(texture_id_t texid, palette_id_t palid1, palette_id_t palid2) {
+	for (int v = 0; v < 32; v++) {
+		for (int ub = 0; ub < 8; ub++) {
+			if ((v >> 2) % 2) {
+				REG32(TEXTURE_RAM0_BASE_ADDR + (texid << 10) + (v << 5) + (ub << 2)) = ((ub & 1) ? palid1 : palid2) * 0x01010101;
+            } else {
+            	REG32(TEXTURE_RAM0_BASE_ADDR + (texid << 10) + (v << 5) + (ub << 2)) = ((ub & 1) ? palid2 : palid1) * 0x01010101;
+            }
+		}
+	}
+}
+
+void set_palette_color(palette_id_t palid, uint8_t r, uint8_t g, uint8_t b) {
+	REG32(PALETTE_RAM0_BASE_ADDR + (palid << 2)) = (r << 16) | (g << 8) | b;
 }

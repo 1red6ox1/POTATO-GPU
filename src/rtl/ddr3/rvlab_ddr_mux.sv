@@ -8,7 +8,7 @@ May HOL block if host does not accept response.
 module rvlab_ddr_mux #(
 	// Lower indices have priority over high ones
 	parameter int N = 2, // >= 2
-	parameter int MAX_OUTSTANDING = 16 // Power of 2, >= 2
+	parameter int MAX_OUTSTANDING = 32 // Power of 2, >= 2
 ) (
 	input  logic clk_i,
 	input  logic rst_ni,
