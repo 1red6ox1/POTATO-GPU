@@ -51,3 +51,16 @@ void fixed_print_full(fixed_t f) {
     int32_t integer = true_x10k / 10000;
     printf("%6d.%04d[0x%08x]", integer, decimals, f);
 }
+
+// Input phase 0..255 represents 0..2*pi. The result is signed Q2.14.
+int32_t sin_q14(uint8_t phase) {
+    uint32_t half_phase = phase & 0x7fu;
+    uint32_t x = half_phase <= 64u ? half_phase : 128u - half_phase;
+    int32_t value = (int32_t)(x * (128u - x) * 4u);
+
+    return (phase & 0x80u) ? -value : value;
+}
+
+int32_t cos_q14(uint8_t phase) {
+    return sin_q14((uint8_t)(phase + 64u));
+}

@@ -17,4 +17,8 @@ void fixed_print(fixed_t f);
 
 void fixed_print_full(fixed_t f);
 
+int32_t sin_q14(uint8_t phase);
+
+int32_t cos_q14(uint8_t phase);
+
 #endif // FIXED_MATH_H
