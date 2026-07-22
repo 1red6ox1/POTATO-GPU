@@ -34,6 +34,7 @@ module texture_memory
 	localparam int unsigned MEMORY_COUNT = TILE_WIDTH / 2;
 
 	logic [TILE_WIDTH-1:0][ADDRESS_WIDTH-1:0] read_address;
+	logic [TILE_WIDTH-1:0][              1:0] ra_offset_q;
 	logic [TEXTURE_NUMBER_WIDTH-1:0] texture_number;
 
 	assign in_ready_o = !out_valid_o || out_ready_i;
@@ -78,8 +79,9 @@ module texture_memory
 	logic                     tl_rvalid;
 
 	tlul_adapter_sram #(
-		.SramAw     (ADDRESS_WIDTH),
-		.SramDw     (32)
+		.SramAw     (ADDRESS_WIDTH - 2),
+		.SramDw     (32),
+		.ByteAccess (0)
 	) tex_adapter_i (
 		.clk_i,
 		.rst_ni,
@@ -92,7 +94,7 @@ module texture_memory
 		.addr_o  (tl_addr),
 		.wdata_o (tl_wdata),
 		.wmask_o (),
-		.rdata_i ({24'h0, texel_o[0]}),
+		.rdata_i (tl_rdata),
 		.rvalid_i(tl_rvalid),
 		.rerror_i('0)
 	);
@@ -100,8 +102,14 @@ module texture_memory
 	always @(posedge clk_i, negedge rst_ni) begin
 	    if (!rst_ni) begin
 	      tl_rvalid <= '0;
+	      ra_offset_q <= '{default: '0};
 	    end else begin
 	      tl_rvalid <= tl_req && !in_valid_i && !tl_we;
+	      if (in_valid_i && in_ready_o) begin
+		      for (int i = 0; i < TILE_WIDTH; i++) begin
+		      	ra_offset_q[i] <= read_address[i][1:0];
+		      end
+	  	  end
 	    end
 	end
 
@@ -110,22 +118,30 @@ module texture_memory
 		// TL-UL channel for Texture DPRAM access can only be used when in_valid_i is 0,
 		// i.e. when there is currently no ongoing rasterization.
 
+		logic [31:0] rdata1;
+		logic [31:0] rdata2;
+
+		if (memory == 0) assign tl_rdata = rdata1;
+
+		assign texel_o[2*memory] = rdata1[8*(ra_offset_q[2*memory]) +: 8];
+		assign texel_o[2*memory+1] = rdata2[8*(ra_offset_q[2*memory+1]) +: 8];
+
 		dpram #(
-			.DATA_WIDTH(8),
-			.DEPTH     (MEMORY_DEPTH),
-			.ADDR_WIDTH(ADDRESS_WIDTH)
+			.DATA_WIDTH(32),
+			.DEPTH     (MEMORY_DEPTH / 4),
+			.ADDR_WIDTH(ADDRESS_WIDTH - 2)
 		) tex_dpram_i (
 			.clk_i    (clk_i),
 
-			.rw_addr_i(in_valid_i ? read_address[2 * memory] : tl_addr),
+			.rw_addr_i(in_valid_i ? read_address[2 * memory][ADDRESS_WIDTH-1:2] : tl_addr),
 			.rw_en_i  (in_valid_i ? in_valid_i && in_ready_o : tl_req),
 			.rw_we_i  (in_valid_i ? '0 : tl_we),
 			.rw_data_i(in_valid_i ? '0 : tl_wdata),
-			.rw_data_o(texel_o[2 * memory]),
+			.rw_data_o(rdata1),
 
-			.r_addr_i(read_address[2 * memory + 1]),
+			.r_addr_i(read_address[2 * memory + 1][ADDRESS_WIDTH-1:2]),
 			.r_en_i  (in_valid_i && in_ready_o),
-			.r_data_o(texel_o[2 * memory + 1])
+			.r_data_o(rdata2)
 		);
 	end
 

@@ -370,8 +370,8 @@ module student (
   logic signed [31:0]           vertex_post_z [2:0];
   logic signed [31:0]           vertex_post_w [2:0];
   logic                         vertex_post_out_valid;
-  logic [10:0]                  vertex_post_sx [2:0];
-  logic [10:0]                  vertex_post_sy [2:0];
+  logic signed [13:0]           vertex_post_sx [2:0];
+  logic signed [13:0]           vertex_post_sy [2:0];
   logic signed [31:0]           vertex_post_ndc_z [2:0];
   logic signed [31:0]           vertex_post_inv_w [2:0];
   logic [10:0]                  vertex_post_triangle_id;

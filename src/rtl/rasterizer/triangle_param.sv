@@ -41,13 +41,115 @@ module triangle_param (
 		Q        = 4'd13
 	} state_e;
 	state_e state_q;
+	
+	
+	logic triangle_outside;
+	logic signed [COORD_WIDTH-1:0] raw_min_x;
+	logic signed [COORD_WIDTH-1:0] raw_max_x;
+	logic signed [COORD_WIDTH-1:0] raw_min_y;
+	logic signed [COORD_WIDTH-1:0] raw_max_y;
+	logic [TILE_X_WIDTH-1:0] bbox_min_x;
+	logic [TILE_X_WIDTH-1:0] bbox_max_x;
+	logic [TILE_Y_WIDTH-1:0] bbox_min_y;
+	logic [TILE_Y_WIDTH-1:0] bbox_max_y;
+
+	localparam logic signed [COORD_WIDTH-1:0] SCREEN_X_LIMIT = COORD_WIDTH'(FRAME_WIDTH);
+	localparam logic signed [COORD_WIDTH-1:0] SCREEN_Y_LIMIT = COORD_WIDTH'(FRAME_HEIGHT);
+	localparam logic [TILE_X_WIDTH-1:0] LAST_TILE_X = TILE_X_WIDTH'(FRAME_WIDTH / TILE_WIDTH - 1);
+	localparam logic [TILE_Y_WIDTH-1:0] LAST_TILE_Y = TILE_Y_WIDTH'(FRAME_HEIGHT / TILE_HEIGHT - 1);
+
+	always_comb begin
+		raw_min_x = triangle_i.ax;
+		raw_max_x = triangle_i.ax;
+		raw_min_y = triangle_i.ay;
+		raw_max_y = triangle_i.ay;
+
+		if ($signed(triangle_i.bx) < raw_min_x) raw_min_x = triangle_i.bx;
+		if ($signed(triangle_i.cx) < raw_min_x) raw_min_x = triangle_i.cx;
+		if ($signed(triangle_i.bx) > raw_max_x) raw_max_x = triangle_i.bx;
+		if ($signed(triangle_i.cx) > raw_max_x) raw_max_x = triangle_i.cx;
+		if ($signed(triangle_i.by) < raw_min_y) raw_min_y = triangle_i.by;
+		if ($signed(triangle_i.cy) < raw_min_y) raw_min_y = triangle_i.cy;
+		if ($signed(triangle_i.by) > raw_max_y) raw_max_y = triangle_i.by;
+		if ($signed(triangle_i.cy) > raw_max_y) raw_max_y = triangle_i.cy;
+
+		triangle_outside = raw_max_x < 0 || raw_min_x >= SCREEN_X_LIMIT	|| raw_max_y < 0 || raw_min_y >= SCREEN_Y_LIMIT;
+
+		if (raw_min_x < 0) begin
+			bbox_min_x = '0;
+		end else if (raw_min_x >= SCREEN_X_LIMIT) begin
+			bbox_min_x = LAST_TILE_X;
+		end else begin
+			bbox_min_x = TILE_X_WIDTH'($unsigned(raw_min_x) >> $clog2(TILE_WIDTH));
+		end
+
+		if (raw_max_x < 0) begin
+			bbox_max_x = '0;
+		end else if (raw_max_x >= SCREEN_X_LIMIT) begin
+			bbox_max_x = LAST_TILE_X;
+		end else begin
+			bbox_max_x = TILE_X_WIDTH'($unsigned(raw_max_x) >> $clog2(TILE_WIDTH));
+		end
+
+		if (raw_min_y < 0) begin
+			bbox_min_y = '0;
+		end else if (raw_min_y >= SCREEN_Y_LIMIT) begin
+			bbox_min_y = LAST_TILE_Y;
+		end else begin
+			bbox_min_y = TILE_Y_WIDTH'($unsigned(raw_min_y) >> $clog2(TILE_HEIGHT));
+		end
+
+		if (raw_max_y < 0) begin
+			bbox_max_y = '0;
+		end else if (raw_max_y >= SCREEN_Y_LIMIT) begin
+			bbox_max_y = LAST_TILE_Y;
+		end else begin
+			bbox_max_y = TILE_Y_WIDTH'($unsigned(raw_max_y) >> $clog2(TILE_HEIGHT));
+		end
+	end
+
+	logic [TEXTURE_ID_WIDTH-1:0] texture_id_q;
+	logic texture_id_valid_q;
+	logic triangle_busy_q;
+	logic texture_complete;
+	logic reciprocal_in_ready;
+
+	always_comb begin
+		param_o = param_q;
+		param_o.texture_id = texture_id_q;
+
+		triangle_id_o = triangle_i.triangle_id;
+		id_out_valid_o = state_q == E && in_valid_i && !triangle_busy_q && !triangle_outside && reciprocal_in_ready;
+		in_ready_o = state_q == E && !triangle_busy_q && (triangle_outside || (reciprocal_in_ready && id_out_ready_i));
+		id_in_ready_o = triangle_busy_q && !texture_id_valid_q;
+		texture_complete = texture_id_valid_q || (id_in_valid_i && id_in_ready_o);
+	end
 
 	logic [17:0] reciprocal_mantissa_q;
 	logic [5:0] reciprocal_shift_q;
-	logic reciprocal_in_ready;
 	logic reciprocal_valid;
 	logic [17:0] reciprocal_mantissa;
 	logic [5:0] reciprocal_shift;
+	logic signed [32:0] triangle_area;
+
+	always_comb begin
+		triangle_area =
+			$signed({{(33 - EDGE_WIDTH){param_q.e1[EDGE_WIDTH-1]}}, param_q.e1})
+			+ $signed({{(33 - EDGE_WIDTH){param_q.e2[EDGE_WIDTH-1]}}, param_q.e2})
+			+ $signed({{(33 - EDGE_WIDTH){param_q.e3[EDGE_WIDTH-1]}}, param_q.e3});
+	end
+
+	triangle_area_reciprocal triangle_area_reciprocal_i (
+		.clk_i,
+		.rst_ni,
+		.in_valid_i (state_q == AREA && reciprocal_in_ready),
+		.in_ready_o (reciprocal_in_ready),
+		.area_i     (triangle_area),
+		.out_valid_o(reciprocal_valid),
+		.out_ready_i(state_q == AREA),
+		.mantissa_o (reciprocal_mantissa),
+		.shift_o    (reciprocal_shift)
+	);
 
 	logic signed [UVQ_WIDTH-1:0] attribute_a;
 	logic signed [UVQ_NUM_WIDTH-1:0] attribute_num_dx;
@@ -60,30 +162,6 @@ module triangle_param (
 	logic signed [UVQ_NUM_WIDTH-1:0] attribute_num_dy_q;
 	logic signed [UVQ_WIDTH-1:0] attribute_dx_q;
 	logic signed [UVQ_WIDTH-1:0] attribute_dy_q;
-	logic [TEXTURE_ID_WIDTH-1:0] texture_id_q;
-	logic triangle_busy_q;
-
-	always_comb begin
-		param_o = param_q;
-		param_o.texture_id = texture_id_q;
-
-		triangle_id_o = triangle_i.triangle_id;
-		id_out_valid_o = in_valid_i && !triangle_busy_q && reciprocal_in_ready;
-		in_ready_o = !triangle_busy_q && reciprocal_in_ready && id_out_ready_i;
-		id_in_ready_o = triangle_busy_q;
-	end
-
-	triangle_area_reciprocal triangle_area_reciprocal_i (
-		.clk_i,
-		.rst_ni,
-		.in_valid_i (state_q == AREA && reciprocal_in_ready),
-		.in_ready_o (reciprocal_in_ready),
-		.area_i     ($signed(param_q.e1) + $signed(param_q.e2) + $signed(param_q.e3)),
-		.out_valid_o(reciprocal_valid),
-		.out_ready_i(state_q == AREA),
-		.mantissa_o (reciprocal_mantissa),
-		.shift_o    (reciprocal_shift)
-	);
 
 	always_comb begin
 		logic signed [UVQ_WIDTH-1:0] attribute_b;
@@ -148,26 +226,15 @@ module triangle_param (
 		end else begin
 			unique case (state_q)
 				E: begin
-					if (in_valid_i && in_ready_o && reciprocal_in_ready) begin
+					if (in_valid_i && in_ready_o && !triangle_outside) begin
 						param_q.triangle_id <= triangle_i.triangle_id;
 						param_q.fbid_color <= triangle_i.fbid_color;
 						param_q.fbid_depth <= triangle_i.fbid_depth;
-						param_q.bbox_min_x <= TILE_X_WIDTH'(((triangle_i.ax < triangle_i.bx) ?
-							((triangle_i.ax < triangle_i.cx) ? triangle_i.ax : triangle_i.cx) :
-							((triangle_i.bx < triangle_i.cx) ? triangle_i.bx : triangle_i.cx))
-							>> $clog2(TILE_WIDTH));
-						param_q.bbox_max_x <= TILE_X_WIDTH'(((triangle_i.ax > triangle_i.bx) ?
-							((triangle_i.ax > triangle_i.cx) ? triangle_i.ax : triangle_i.cx) :
-							((triangle_i.bx > triangle_i.cx) ? triangle_i.bx : triangle_i.cx))
-							>> $clog2(TILE_WIDTH));
-						param_q.bbox_min_y <= TILE_Y_WIDTH'(((triangle_i.ay < triangle_i.by) ?
-							((triangle_i.ay < triangle_i.cy) ? triangle_i.ay : triangle_i.cy) :
-							((triangle_i.by < triangle_i.cy) ? triangle_i.by : triangle_i.cy))
-							>> $clog2(TILE_HEIGHT));
-						param_q.bbox_max_y <= TILE_Y_WIDTH'(((triangle_i.ay > triangle_i.by) ?
-							((triangle_i.ay > triangle_i.cy) ? triangle_i.ay : triangle_i.cy) :
-							((triangle_i.by > triangle_i.cy) ? triangle_i.by : triangle_i.cy))
-							>> $clog2(TILE_HEIGHT));
+
+						param_q.bbox_min_x <= bbox_min_x;
+						param_q.bbox_max_x <= bbox_max_x;
+						param_q.bbox_min_y <= bbox_min_y;
+						param_q.bbox_max_y <= bbox_max_y;
 
 						param_q.dx1 <= triangle_i.bx - triangle_i.ax;
 						param_q.dy1 <= triangle_i.by - triangle_i.ay;
@@ -256,7 +323,9 @@ module triangle_param (
 					param_q.q     <= attribute_value;
 					param_q.dq_dx <= attribute_dx_q;
 					param_q.dq_dy <= attribute_dy_q;
-					state_q <= E;
+					if (texture_complete) begin
+						state_q <= E;
+					end
 				end
 			endcase
 		end
@@ -265,8 +334,15 @@ module triangle_param (
 	always_ff @(posedge clk_i) begin
 		if (~rst_ni) begin
 			texture_id_q <= '0;
-		end else if (id_in_valid_i && id_in_ready_o) begin
-			texture_id_q <= texture_id_i;
+			texture_id_valid_q <= 1'b0;
+		end else begin
+			if (state_q == E && in_valid_i && in_ready_o && !triangle_outside) begin
+				texture_id_valid_q <= 1'b0;
+			end
+			if (id_in_valid_i && id_in_ready_o) begin
+				texture_id_q <= texture_id_i;
+				texture_id_valid_q <= 1'b1;
+			end
 		end
 	end
 
@@ -275,10 +351,10 @@ module triangle_param (
 			triangle_q  <= '0;
 			out_valid_o <= 1'b0;
 			triangle_busy_q <= 1'b0;
-		end else if (state_q == E && in_valid_i && in_ready_o && reciprocal_in_ready) begin
+		end else if (state_q == E && in_valid_i && in_ready_o && !triangle_outside) begin
 			triangle_q <= triangle_i;
 			triangle_busy_q <= 1'b1;
-		end else if (state_q == Q) begin
+		end else if (state_q == Q && texture_complete) begin
 			out_valid_o <= 1'b1;
 		end else if (state_q == E && out_ready_i && out_valid_o) begin
 			out_valid_o <= 1'b0;

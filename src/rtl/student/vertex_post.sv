@@ -14,8 +14,8 @@ module vertex_post #(
   parameter int FRAC_WIDTH = 16,
   parameter int SCREEN_W   = 1920,
   parameter int SCREEN_H   = 1080,
-  parameter int SX_WIDTH   = 11,
-  parameter int SY_WIDTH   = 11
+  parameter int SX_WIDTH   = 14,
+  parameter int SY_WIDTH   = 14
 ) (
   input  logic clk,
   input  logic rst_n,
@@ -38,8 +38,8 @@ module vertex_post #(
   output logic out_valid,
   input  logic out_ready_i,
 
-  output logic [SX_WIDTH-1:0]          sx_o    [2:0],
-  output logic [SY_WIDTH-1:0]          sy_o    [2:0],
+  output logic signed [SX_WIDTH-1:0]          sx_o    [2:0],
+  output logic signed [SY_WIDTH-1:0]          sy_o    [2:0],
   output logic signed [DATA_WIDTH-1:0] z_o     [2:0],
 
   // 1 / w output per vertex
@@ -72,7 +72,7 @@ module vertex_post #(
   endfunction
 
   // Map x_ndc in [-1,1]
-  function automatic logic [SX_WIDTH-1:0] vp_x(input logic signed [DATA_WIDTH-1:0] x);
+  function automatic logic signed [SX_WIDTH-1:0] vp_x(input logic signed [DATA_WIDTH-1:0] x);
     logic signed [63:0] px;
     begin
       px = ($signed(64'(x)) + ONE_FP) * HALF_W >>> FRAC_WIDTH;
@@ -81,7 +81,7 @@ module vertex_post #(
   endfunction
 
   // Map y_ndc in [-1,1]
-  function automatic logic [SY_WIDTH-1:0] vp_y(input logic signed [DATA_WIDTH-1:0] y);
+  function automatic logic signed [SY_WIDTH-1:0] vp_y(input logic signed [DATA_WIDTH-1:0] y);
     logic signed [63:0] py;
     begin
       py = (ONE_FP - $signed(64'(y))) * HALF_H >>> FRAC_WIDTH;

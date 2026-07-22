@@ -5,7 +5,7 @@ package rasterizer_pkg;
 	localparam int unsigned TILE_WIDTH   = 32;
 	localparam int unsigned TILE_HEIGHT  = 8;
 
-	localparam int unsigned COORD_WIDTH = 12;
+	localparam int unsigned COORD_WIDTH = 14;
 	localparam int unsigned EDGE_WIDTH  = 2 * COORD_WIDTH;
 	localparam int unsigned DEPTH_WIDTH = 16;
 	localparam int unsigned DEPTH_FRAC_WIDTH = 12;

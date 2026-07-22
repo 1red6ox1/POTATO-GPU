@@ -70,7 +70,7 @@ class ProjectUtils(Block):
 				for uv, idx in enumerate(idxs):
 					u = uv // 32
 					v = uv % 32
-					wfile.write(idx.to_bytes(4, byteorder="little"))
+					wfile.write(idx.to_bytes(1, byteorder="little"))
 		print("Done!               ")
 
 
@@ -92,6 +92,7 @@ class ProjectUtils(Block):
 			ocd.cmd("riscv set_mem_access sysbus")
 
 			# Manually trigger DDR init
+			ocd.writeword(0x1f001004, 0)
 			ocd.writeword(0x1f001004, 1)
 			while ocd.readword((0x1f001000 & 2) == 0): pass
 
@@ -120,7 +121,7 @@ class ProjectUtils(Block):
 				for uv, idx in enumerate(idxs):
 					u = uv // 32
 					v = uv % 32
-					wfile.write(idx.to_bytes(4, byteorder="little"))
+					wfile.write(idx.to_bytes(1, byteorder="little"))
 		print("Done!               ")
 
 
