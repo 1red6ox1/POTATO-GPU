@@ -60,6 +60,8 @@ int main(void) {
 	write_geometry(cube_triangles, cube_triangle_count);
 	load_palette((uint32_t *)PALETTE_BASE);
 
+	ibuf_getc();
+
 	frame_start = read_csr("mcycle");
 	init = frame_start;
 	while (1) {
