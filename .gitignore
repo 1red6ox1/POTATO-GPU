@@ -8,6 +8,3 @@ vivado*.log
 .venv
 obj_dir/
 localdata/
-
-*.gif
-*.obj
