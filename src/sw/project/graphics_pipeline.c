@@ -168,5 +168,6 @@ void set_palette_color(palette_id_t palid, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void load_slide_to_fb(buf_id_t fbid) {
-	memcpy_dma((uint32_t *)(VIDEO_BASE + (fbid << 24)), (uint32_t *)SLIDE_BASE, 8192 * 1080);
+	memcpy_dma((uint32_t *)((1 << 31) + (fbid << 24)), (uint32_t *)SLIDE_BASE, 8192 * 1080);
+	_flush_ddr_llc();
 }

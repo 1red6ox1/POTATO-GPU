@@ -19,7 +19,7 @@ class ProjectUtils(Block):
 		self.TEXTURE_RAM = 0x10900000
 		self.PALETTE_RAM = 0x10A00000
 		self.VIDEO_BASE  = 0x90000000
-		self.SLIDE_BASE  = 0x98000000
+		self.SLIDE_BASE  = 0x98000100
 		self.MESH_BASE   = 0x8E000000
 		self.CONFIG_BASE = 0x8F000000
 
@@ -198,7 +198,7 @@ class ProjectUtils(Block):
 		with openocd.start(self.design_dir / "openocd/fpga.cfg") as ocd:
 			self.init_board(ocd)
 
-			ocd.cmd(f"load_image {slide.slide_file} {slide.SLIDE_BASE} bin")
+			ocd.cmd(f"load_image {slide.slide_file} {self.SLIDE_BASE} bin")
 
 	@task()
 	def prepare_obj(self, cwd):

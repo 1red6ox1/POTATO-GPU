@@ -7,6 +7,7 @@
 #include "matrix_math.h"
 #include "hdmi_utils.h"
 #include "memcpy.h"
+#include "dram_addrmap.h"
 
 #define TRIANGLE_ID_MASK 0x7ffu
 #define BACKGROUND_COLOR 0x02040cu

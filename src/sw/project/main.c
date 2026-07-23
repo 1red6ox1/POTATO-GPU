@@ -37,7 +37,7 @@ int main(void) {
 	printf("Loading %d triangles...\n", tricount);
 
 	//make_cube(cube_triangles, 4, &tricount);
-	write_geometry((triangle_t *)MESH_BASE, tricount);
+	//write_geometry((triangle_t *)MESH_BASE, tricount);
 
 	clear_buffers();
 
@@ -57,16 +57,18 @@ int main(void) {
 
 		load_slide_to_fb(draw_color);
 
-		make_camera_matrix(camera_matrix, camera_phase, camera_eye);
-		write_camera_matrix(camera_matrix);
-		render_frame(draw_color, draw_depth);
+		//make_camera_matrix(camera_matrix, camera_phase, camera_eye);
+		//write_camera_matrix(camera_matrix);
+		//render_frame(draw_color, draw_depth);
 
 		set_hdmi_fbid(draw_color);
 
 		frame++;
 
-		update_fps_display(draw_color);
+		//update_fps_display(draw_color);
 		advance_buffers(&draw_color, &draw_depth);
 		if (frame % 3 == 0) camera_phase = (uint8_t)(camera_phase + 1u);
 	}
+
+	return 0;
 }

@@ -47,6 +47,14 @@ char ibuf_getc(void) {
     return ret;
 }
 
+char ibuf_getc_nonblocking(void) {
+    if (ibuf_num_enqueued() == 0) return '\0';
+    ridx = hostio.ibuf_ridx;
+    ret = hostio.ibuf[ridx];
+    hostio.ibuf_ridx = (ridx + 1) & (IBUF_SIZE-1);
+    return ret;
+}
+
 static size_t
 stdin_read(FILE *fp, char *bp, size_t n)
 {
