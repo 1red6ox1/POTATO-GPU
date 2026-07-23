@@ -52,15 +52,30 @@ void fixed_print_full(fixed_t f) {
     printf("%6d.%04d[0x%08x]", integer, decimals, f);
 }
 
-// Input phase 0..255 represents 0..2*pi. The result is signed Q2.14.
-int32_t sin_q14(uint8_t phase) {
-    uint32_t half_phase = phase & 0x7fu;
-    uint32_t x = half_phase <= 64u ? half_phase : 128u - half_phase;
-    int32_t value = (int32_t)(x * (128u - x) * 4u);
-
-    return (phase & 0x80u) ? -value : value;
+#define SIN_LUT_SIZE        256
+#define SIN_LUT_INDEX_SHIFT 16
+#define SIN_LUT_INDEX_MASK  0xFF
+#define SIN_LUT_FRAC_SHIFT  14
+#define SIN_LUT_FRAC_MASK   0x3
+#define SIN_LUT_QUARTER     (SIN_LUT_SIZE / 4)  /* quarter period, for cos() */
+ 
+extern const fixed_t sin_lut[SIN_LUT_SIZE];
+ 
+fixed_t fixed_sin(fixed_t angle) {
+    uint32_t idx  = ((uint32_t)angle >> SIN_LUT_INDEX_SHIFT) & SIN_LUT_INDEX_MASK;
+    uint32_t frac = ((uint32_t)angle >> SIN_LUT_FRAC_SHIFT) & SIN_LUT_FRAC_MASK;
+ 
+    fixed_t a = sin_lut[idx];
+    fixed_t b = sin_lut[(idx + 1) & SIN_LUT_INDEX_MASK];
+ 
+    /* linear interpolation: a + (b - a) * frac / 4 */
+    return a + (fixed_t)(((int64_t)(b - a) * (int64_t)frac) >> 2);
+}
+ 
+fixed_t fixed_cos(fixed_t angle) {
+    return fixed_sin(angle + (SIN_LUT_QUARTER << SIN_LUT_INDEX_SHIFT));
 }
 
-int32_t cos_q14(uint8_t phase) {
-    return sin_q14((uint8_t)(phase + 64u));
+fixed_t fixed_lerp(fixed_t a, fixed_t b, fixed_t t) {
+    return a + fixed_mul(b - a, t);
 }

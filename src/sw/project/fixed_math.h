@@ -17,8 +17,10 @@ void fixed_print(fixed_t f);
 
 void fixed_print_full(fixed_t f);
 
-int32_t sin_q14(uint8_t phase);
+fixed_t fixed_sin(fixed_t angle);
 
-int32_t cos_q14(uint8_t phase);
+fixed_t fixed_cos(fixed_t angle);
+
+fixed_t fixed_lerp(fixed_t a, fixed_t b, fixed_t t);
 
 #endif // FIXED_MATH_H

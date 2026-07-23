@@ -24,6 +24,8 @@ class ProjectUtils(Block):
 		self.CONFIG_BASE = 0x8F000000
 
 		self.MESH_SIZE_ADDR = self.CONFIG_BASE + 0x000000
+		self.FRAME_CYCLES   = self.CONFIG_BASE + 0x000004
+		self.ANIM_FRAMES    = self.CONFIG_BASE + 0x000008
 
 	def _texram_at(self, texid, u, v):
 		addr = self.TEXTURE_RAM + ((texid << 10) | (u << 5) | v) * 4
@@ -97,7 +99,10 @@ class ProjectUtils(Block):
 			self.design_dir / "project/texture.gif", (128, 128), 256, False
 		)
 
-		print("Decoded %d frames (%d cyc/frame)!" % (len(frame_indices), ms_times[0]*50000))
+		frames = len(frame_indices)
+		cycles_per_frame = ms_times[0]*50000
+
+		print("Decoded %d frames (%d cyc/frame)!" % (frames, cycles_per_frame))
 
 		print("Generating palette binary...")
 		with open(cwd / "palette.bin", "wb") as wfile:
@@ -119,6 +124,8 @@ class ProjectUtils(Block):
 		r = Result()
 		r.palette_file = cwd / "palette.bin"
 		r.texture_file = cwd / "texture.bin"
+		r.frames = frames
+		r.cycles_per_frame = cycles_per_frame
 
 		return r
 
@@ -132,6 +139,8 @@ class ProjectUtils(Block):
 			# Load both memfiles
 			ocd.cmd(f"load_image {gif.palette_file} {self.PALETTE_RAM} bin")
 			ocd.cmd(f"load_image {gif.texture_file} {self.VIDEO_BASE} bin")
+			ocd.writeword(self.FRAME_CYCLES, gif.cycles_per_frame)
+			ocd.writeword(self.ANIM_FRAMES, gif.frames)
 
 	@task()
 	def prepare_image(self, cwd):
