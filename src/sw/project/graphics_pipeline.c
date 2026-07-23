@@ -166,3 +166,7 @@ void set_texture_checkered(texture_id_t texid, palette_id_t palid1, palette_id_t
 void set_palette_color(palette_id_t palid, uint8_t r, uint8_t g, uint8_t b) {
 	REG32(PALETTE_RAM0_BASE_ADDR + (palid << 2)) = (r << 16) | (g << 8) | b;
 }
+
+void load_slide_to_fb(buf_id_t fbid) {
+	memcpy_dma((uint32_t *)(VIDEO_BASE + (fbid << 24)), (uint32_t *)SLIDE_BASE, 8192 * 1080);
+}

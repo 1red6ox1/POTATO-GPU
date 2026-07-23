@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 David Schröder
 
+import importlib.util
+from pathlib import Path
+
 from pydesignflow import Block, task, Result
-from .tools import openocd, gif_util, riscv_debug_helper, load_obj
+from .tools import openocd, gif_util, riscv_debug_helper, load_obj, slide_to_fb
 from io import StringIO
 
 class ProjectUtils(Block):
@@ -16,6 +19,7 @@ class ProjectUtils(Block):
 		self.TEXTURE_RAM = 0x10900000
 		self.PALETTE_RAM = 0x10A00000
 		self.VIDEO_BASE  = 0x90000000
+		self.SLIDE_BASE  = 0x98000000
 		self.MESH_BASE   = 0x8E000000
 		self.CONFIG_BASE = 0x8F000000
 
@@ -168,6 +172,33 @@ class ProjectUtils(Block):
 			# Load both memfiles
 			ocd.cmd(f"load_image {png.palette_file} {self.PALETTE_RAM} bin")
 			ocd.cmd(f"load_image {png.texture_file} {self.VIDEO_BASE} bin")
+
+	@task()
+	def prepare_slide(self, cwd):
+		print("Generating slide framebuffer binary...", end=" ")
+		slide_file = cwd / "slide.mem"
+		byte_count = slide_to_fb.convert_image_file(
+			self.design_dir / "project/slides/PotatoDemo.png",
+			slide_file,
+			width=slide_to_fb.FRAME_WIDTH,
+			height=slide_to_fb.FRAME_HEIGHT,
+			fit="contain",
+		)
+		print("Done!")
+
+		r = Result()
+		r.slide_file = slide_file
+		r.byte_count = byte_count
+		return r
+
+	@task(requires={
+		"slide": ".prepare_slide"
+	})
+	def load_slide(self, cwd, slide):
+		with openocd.start(self.design_dir / "openocd/fpga.cfg") as ocd:
+			self.init_board(ocd)
+
+			ocd.cmd(f"load_image {slide.slide_file} {slide.SLIDE_BASE} bin")
 
 	@task()
 	def prepare_obj(self, cwd):

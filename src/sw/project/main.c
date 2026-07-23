@@ -55,6 +55,8 @@ int main(void) {
 
 		//memcpy_dma(TEXTURE_RAM0_BASE_ADDR, VIDEO_MEM_BASE + (frameid << 14), 16384);
 
+		load_slide_to_fb(draw_color);
+
 		make_camera_matrix(camera_matrix, camera_phase, camera_eye);
 		write_camera_matrix(camera_matrix);
 		render_frame(draw_color, draw_depth);
