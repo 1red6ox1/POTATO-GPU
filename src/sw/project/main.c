@@ -18,6 +18,9 @@
 
 static triangle_t cube_triangles[TRIANGLE_COUNT];
 
+char ibuf_getc();
+char ibuf_getc_nonblocking();
+
 int main(void) {
 	matrix_t proj_matrix;
 	matrix_t camera_matrix;
@@ -50,7 +53,7 @@ int main(void) {
 	clear_buffers();
 	enable_hdmi();
 
-	int state = 2; // 0 = image, 1 = monke, 2 = bad apple animation
+	int state = 0; // 0-7 = slides, 8 = monke, 9 = bad apple animation
 
 	printf("Starting main loop!\n");
 
@@ -59,8 +62,6 @@ int main(void) {
 
 	write_geometry(cube_triangles, cube_triangle_count);
 	load_palette((uint32_t *)PALETTE_BASE);
-
-	ibuf_getc();
 
 	frame_start = read_csr("mcycle");
 	init = frame_start;
@@ -76,13 +77,20 @@ int main(void) {
 		smooth_camera.elevation = fixed_lerp(smooth_camera.elevation, camera.elevation, CAM_LERP_SPEED);
 
 		switch (state) {
-			case 0: {
-				load_slide_to_fb(draw_color);
+			case 0:
+			case 1:
+			case 2:
+			case 3:
+			case 4:
+			case 5:
+			case 6:
+			case 7: {
+				load_slide_to_fb(draw_color, state);
 				break;
 			}
-			case 2:
+			case 9:
 				load_textures(0, (uint32_t *)(VIDEO_BASE + (frameid << 14)), 16);
-			case 1: {
+			case 8: {
 				get_camera_matrix(camera_matrix, &smooth_camera, proj_matrix);
 				write_camera_matrix(camera_matrix);
 				render_frame(draw_color, draw_depth);
@@ -106,12 +114,12 @@ int main(void) {
 		while ((selected_char = ibuf_getc_nonblocking())) {
 			switch (selected_char) {
 				case 'e': {
-					state = (state + 1) % 3;
+					state = (state + 1) % 10;
 					is_switching_scene = true;
 					break;
 				}
 				case 'q': {
-					state = (state + 2) % 3;
+					state = (state + 9) % 10;
 					is_switching_scene = true;
 					break;
 				}
@@ -173,7 +181,7 @@ int main(void) {
 
 		if (is_switching_scene) {
 			switch (state) {
-				case 1: {
+				case 8: {
 					uint32_t tricount = REG32(MESH_SIZE_ADDR);
 					write_geometry((triangle_t *)MESH_BASE, tricount);
 					set_texture_checkered(0, 0, 1);
@@ -181,7 +189,7 @@ int main(void) {
 					set_palette_color(1, 200, 200, 200);
 					break;
 				}
-				case 2:
+				case 9:
 					init = frame_start;
 					write_geometry(cube_triangles, cube_triangle_count);
 					load_palette((uint32_t *)PALETTE_BASE);

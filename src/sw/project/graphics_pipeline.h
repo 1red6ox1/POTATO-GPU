@@ -77,6 +77,6 @@ void set_palette_color(palette_id_t palid, uint8_t r, uint8_t g, uint8_t b);
 
 void load_palette(uint32_t *address);
 
-void load_slide_to_fb(buf_id_t fbid);
+void load_slide_to_fb(buf_id_t fbid, uint8_t slide_id);
 
 #endif // GRAPHICS_PIPELINE_H

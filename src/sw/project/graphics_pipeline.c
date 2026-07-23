@@ -175,7 +175,11 @@ void load_palette(uint32_t *address) {
 	memcpy_dma((uint32_t *)PALETTE_RAM0_BASE_ADDR, address, 1024);
 }
 
-void load_slide_to_fb(buf_id_t fbid) {
-	memcpy_dma((uint32_t *)((1 << 31) + (fbid << 24)), (uint32_t *)SLIDE_BASE, 8192 * 1080);
+void load_slide_to_fb(buf_id_t fbid, uint8_t slide_id) {
+	memcpy_dma(
+		(uint32_t *)((1 << 31) + (fbid << 24)),
+		(uint32_t *)(SLIDE_BASE + (slide_id << 24)),
+		8192 * 1080
+	);
 	_flush_ddr_llc();
 }

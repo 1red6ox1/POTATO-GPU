@@ -37,7 +37,7 @@ for sw_dir in sw_dirs:
     flow[f'sw_{sw_dir}'] = Program(sw_dir, dependency_map={
         'libsys':'libsys', 'ref':'sw_project', 'reggen': 'reggen'})
 
-flow['project_utils'] = ProjectUtils()
+flow['project_utils'] = ProjectUtils(dependency_map={'sw_project': 'sw_project'})
 
 # Hardware
 # --------

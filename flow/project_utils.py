@@ -18,7 +18,7 @@ class ProjectUtils(Block):
 		self.design_dir = self.src_dir / "design"
 		self.TEXTURE_RAM = 0x10900000
 		self.VIDEO_BASE  = 0x90000000
-		self.SLIDE_BASE  = 0x98000100
+		self.SLIDE_BASE  = 0x97000100
 		self.PALETTE_RAM = 0x8D000000
 		self.MESH_BASE   = 0x8E000000
 		self.CONFIG_BASE = 0x8F000000
@@ -183,31 +183,34 @@ class ProjectUtils(Block):
 			ocd.cmd(f"load_image {png.texture_file} {self.VIDEO_BASE} bin")
 
 	@task()
-	def prepare_slide(self, cwd):
-		print("Generating slide framebuffer binary...", end=" ")
-		slide_file = cwd / "slide.mem"
-		byte_count = slide_to_fb.convert_image_file(
-			self.design_dir / "project/slides/PotatoDemo.png",
-			slide_file,
-			width=slide_to_fb.FRAME_WIDTH,
-			height=slide_to_fb.FRAME_HEIGHT,
-			fit="contain",
-		)
+	def prepare_slides(self, cwd):
+		print("Generating slide deck framebuffer binary...")
+		slide_files = [cwd / f"slide{i}.mem" for i in range(1, 9)]
+		for i in range(1, 9):
+			print(f"  {i}")
+			slide_to_fb.convert_image_file(
+				self.design_dir / f"project/slides/Slide{i}.jpg",
+				slide_files[i-1],
+				width=slide_to_fb.FRAME_WIDTH,
+				height=slide_to_fb.FRAME_HEIGHT,
+				fit="contain",
+			)
 		print("Done!")
 
 		r = Result()
-		r.slide_file = slide_file
-		r.byte_count = byte_count
+		r.slide_files = slide_files
 		return r
 
 	@task(requires={
-		"slide": ".prepare_slide"
+		"slides": ".prepare_slides"
 	})
-	def load_slide(self, cwd, slide):
+	def load_slides(self, cwd, slides):
 		with openocd.start(self.design_dir / "openocd/fpga.cfg") as ocd:
 			self.init_board(ocd)
 
-			ocd.cmd(f"load_image {slide.slide_file} {self.SLIDE_BASE} bin")
+			for i, file in enumerate(slides.slide_files):
+				print(f"Loading slide {i+1}...")
+				ocd.cmd(f"load_image {file} {self.SLIDE_BASE + i*(1<<24)} bin")
 
 	@task()
 	def prepare_obj(self, cwd):
@@ -232,3 +235,12 @@ class ProjectUtils(Block):
 
 			ocd.cmd(f"load_image {obj.mesh_file} {self.MESH_BASE} bin")
 			ocd.writeword(self.MESH_SIZE_ADDR, obj.tri_count)
+
+	@task(requires={
+		"slides": ".load_slides",
+		"mesh": ".load_mesh",
+		"gif": ".load_gif",
+		"run": "sw_project.run"
+	}, always_rebuild=True, hidden=True)
+	def demo(self, cwd, slides, mesh, gif, run):
+		pass
