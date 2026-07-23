@@ -2,7 +2,7 @@
 
 #define CAMERA_LOOK_DISTANCE 0x00040000
 #define CAMERA_NEAR    (FIXED_ONE / 4)
-#define CAMERA_FAR     (16 * FIXED_ONE)
+#define CAMERA_FAR     (100 * FIXED_ONE)
 #define INVERSE_ASPECT 0x00009000
 
 void init_camera(camera_t *cam) {

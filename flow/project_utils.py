@@ -189,7 +189,7 @@ class ProjectUtils(Block):
 		for i in range(1, 9):
 			print(f"  {i}")
 			slide_to_fb.convert_image_file(
-				self.design_dir / f"project/slides/Slide{i}.jpg",
+				self.design_dir / f"project/slides/Slide{i}.png",
 				slide_files[i-1],
 				width=slide_to_fb.FRAME_WIDTH,
 				height=slide_to_fb.FRAME_HEIGHT,
