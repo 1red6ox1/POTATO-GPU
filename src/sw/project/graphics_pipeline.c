@@ -163,8 +163,16 @@ void set_texture_checkered(texture_id_t texid, palette_id_t palid1, palette_id_t
 	}
 }
 
+void load_textures(texture_id_t texid, uint32_t *address, uint32_t count) {
+	memcpy_dma((uint32_t *)(TEXTURE_RAM0_BASE_ADDR + (texid << 10)), address, count * 1024);
+}
+
 void set_palette_color(palette_id_t palid, uint8_t r, uint8_t g, uint8_t b) {
 	REG32(PALETTE_RAM0_BASE_ADDR + (palid << 2)) = (r << 16) | (g << 8) | b;
+}
+
+void load_palette(uint32_t *address) {
+	memcpy_dma((uint32_t *)PALETTE_RAM0_BASE_ADDR, address, 1024);
 }
 
 void load_slide_to_fb(buf_id_t fbid) {

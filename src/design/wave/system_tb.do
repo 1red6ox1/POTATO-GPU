@@ -671,8 +671,8 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/PIX
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/W_CHUNKS
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/clk_i
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/rst_ni
-add wave -noupdate -expand /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/req_o
-add wave -noupdate -expand /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/rsp_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/req_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/rsp_i
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/r_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/g_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/b_o
@@ -687,7 +687,6 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/g_b
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/b_buf_q
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/cx_q
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/cy_q
-add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/valid_q
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/rptr
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/rptr_block
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/hdmi_i/fetch_fifo_i/wptr
@@ -702,8 +701,8 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/LOGN
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/LOG_REQS
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/clk_i
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/rst_ni
-add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[2]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i
-add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o[2]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o
+add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i[1]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_i
+add wave -noupdate -expand -subitemconfig {{/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o[2]} -expand {/system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o[1]} -expand} /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/host_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/dev_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/dev_i
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_xbar_i/ancillary_mem
@@ -755,6 +754,33 @@ add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/data_
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/data_wdata_q
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/fe_modify_req
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/ddr_llc_i/cache_i/modify_clear
+add wave -noupdate -divider Prefetcher
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/clk_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/rst_ni
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/fe_req_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/fe_rsp_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/be_req_o
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/be_rsp_i
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/entry_states
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/entry_addrs
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/entry_data
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/addr_match_mask
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/addr_le_mask
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/valid_mask
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/invalid_mask
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/pending_mask
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/non_pending_mask
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/fe_req_pending
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/fe_miss
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/allocate_addr
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/can_allocate
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/next_prefetch_addr
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/is_prefetching
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/fe_req_xchg
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/fe_rsp_xchg
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/be_req_xchg
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/be_rsp_xchg
+add wave -noupdate /system_tb/board/DUT/core_i/student_i/prefetcher_i/valid_id
 add wave -noupdate -divider {DDR3 infrastructure}
 add wave -noupdate -expand /system_tb/board/DUT/tlul_ddr_i/blockmgr_req
 add wave -noupdate /system_tb/board/DUT/tlul_ddr_i/blockmgr_rsp
@@ -819,7 +845,7 @@ add wave -noupdate -divider {Running Light}
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/rlight_i/led_o
 add wave -noupdate /system_tb/board/DUT/core_i/student_i/rlight_i/cnt
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {863785239213 fs} 0}
+WaveRestoreCursors {{Cursor 1} {83191797230 fs} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 469
 configure wave -valuecolwidth 64
@@ -835,4 +861,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ns
 update
-WaveRestoreZoom {383373642501 fs} {396263165809 fs}
+WaveRestoreZoom {81120598794 fs} {81306443758 fs}

@@ -57,6 +57,4 @@ int ddr_init(void);
 #define PALETTE_RAM0_BASE_ADDR 0x10A00000
 #define UV_RAM0_BASE_ADDR 0x10B00000
 
-#define VIDEO_MEM_BASE 0x90000000
-
 #endif // _RVLAB_H

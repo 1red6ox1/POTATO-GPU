@@ -48,6 +48,8 @@ char ibuf_getc(void) {
 }
 
 char ibuf_getc_nonblocking(void) {
+    int ridx;
+    char ret;
     if (ibuf_num_enqueued() == 0) return '\0';
     ridx = hostio.ibuf_ridx;
     ret = hostio.ibuf[ridx];

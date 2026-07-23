@@ -73,9 +73,6 @@ def build_global_palette(rgb_frames, num_colors):
         tuple(raw_palette[i * 3: i * 3 + 3])
         for i in range(min(num_colors, 256))
     ]
-    # Trim any unused trailing black padding Pillow adds beyond the
-    # colors actually found, but keep at least `color_count` entries.
-    palette = palette[:max(color_count, 1)]
 
     return palette, quantized
 

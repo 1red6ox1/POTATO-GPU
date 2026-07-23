@@ -17,9 +17,9 @@ class ProjectUtils(Block):
 		self.src_dir = self.flow.base_dir / "src"
 		self.design_dir = self.src_dir / "design"
 		self.TEXTURE_RAM = 0x10900000
-		self.PALETTE_RAM = 0x10A00000
 		self.VIDEO_BASE  = 0x90000000
 		self.SLIDE_BASE  = 0x98000100
+		self.PALETTE_RAM = 0x8D000000
 		self.MESH_BASE   = 0x8E000000
 		self.CONFIG_BASE = 0x8F000000
 
