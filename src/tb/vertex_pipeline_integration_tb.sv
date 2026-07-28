@@ -6,11 +6,15 @@ module vertex_pipeline_integration_tb;
 
   localparam int DATA_WIDTH = 32;
   localparam int TRI_ID_WIDTH = 10;
+  localparam int OUT_ID_WIDTH = TRI_ID_WIDTH + 1;
   localparam int VTX_ID_WIDTH = 2;
   localparam int NUM_TRIS = 12;
   localparam int NUM_VERTS = 3;
   localparam int MAT_DIM = 4;
   localparam int ONE_Q16 = 32'sh0001_0000;
+  localparam logic signed [UVQ_WIDTH-1:0] ONE_Q24 = 32'sh0100_0000;
+  localparam logic signed [UVQ_WIDTH-1:0] HALF_Q24 = 32'sh0080_0000;
+  localparam logic signed [UVQ_WIDTH-1:0] QUARTER_Q24 = 32'sh0040_0000;
   localparam int HALF_SCREEN_W = FRAME_WIDTH / 2;
   localparam int HALF_SCREEN_H = FRAME_HEIGHT / 2;
 
@@ -30,12 +34,12 @@ module vertex_pipeline_integration_tb;
 
   logic                         vertex_out_valid;
   logic                         vertex_out_ready;
-  logic [TRI_ID_WIDTH-1:0]      vertex_out_id;
+  logic [OUT_ID_WIDTH-1:0]      vertex_out_id;
   data_t                        vertex_out_vec [3:0];
 
   logic                         post_in_valid;
   logic                         post_in_ready;
-  logic [TRI_ID_WIDTH-1:0]      post_in_id;
+  logic [OUT_ID_WIDTH-1:0]      post_in_id;
   data_t                        post_x [2:0];
   data_t                        post_y [2:0];
   data_t                        post_z [2:0];
@@ -46,13 +50,14 @@ module vertex_pipeline_integration_tb;
   logic [10:0]                  post_sy [2:0];
   data_t                        post_ndc_z [2:0];
   data_t                        post_inv_w [2:0];
+  logic [10:0]                  post_triangle_id;
 
   logic                         adapter_ready;
-  triangle2d_t                  triangle2d;
+  triangle_t                    triangle2d;
   logic                         triangle2d_valid;
   logic                         triangle2d_ready;
 
-  rasterization_param_t         raster_param;
+  triangle_param_t              raster_param;
   logic                         raster_param_valid;
   logic                         raster_param_ready;
   logic                         raster_param_in_ready;
@@ -90,7 +95,7 @@ module vertex_pipeline_integration_tb;
 
   vertex_triangle_collector #(
     .DATA_WIDTH  (DATA_WIDTH),
-    .TRI_ID_WIDTH(TRI_ID_WIDTH)
+    .TRI_ID_WIDTH(OUT_ID_WIDTH)
   ) vertex_triangle_collector_i (
     .clk_i(clk),
     .rst_ni      (rst_n),
@@ -123,14 +128,14 @@ module vertex_pipeline_integration_tb;
     .y_i       (post_y),
     .z_i       (post_z),
     .w_i       (post_w),
-    .tri_id_i    ({1'b0, post_in_id}),
+    .tri_id_i    (post_in_id),
     .out_valid   (post_out_valid),
     .out_ready_i (adapter_ready),
     .sx_o        (post_sx),
     .sy_o      (post_sy),
     .z_o       (post_ndc_z),
     .inv_w_o   (post_inv_w),
-    .tri_id_o  ()
+    .tri_id_o  (post_triangle_id)
   );
 
   vertex_post_to_triangle2d #(
@@ -140,24 +145,33 @@ module vertex_pipeline_integration_tb;
     .rst_ni       (rst_n),
     .in_ready_o   (adapter_ready),
     .in_valid_i   (post_out_valid),
+    .triangle_id_i(post_triangle_id),
     .sx_i         (post_sx),
     .sy_i         (post_sy),
     .z_i          (post_ndc_z),
     .inv_w_i      (post_inv_w),
-    .triangle2d_o (triangle2d),
+    .fbid_color_i (2'd0),
+    .fbid_depth_i (2'd0),
+    .triangle_o   (triangle2d),
     .out_valid_o  (triangle2d_valid),
     .out_ready_i  (triangle2d_ready)
   );
 
-  rasterizer_param rasterizer_param_i (
+  triangle_param triangle_param_i (
     .clk_i(clk),
     .rst_ni       (rst_n),
-    .triangle2d_i (triangle2d),
+    .triangle_i   (triangle2d),
     .in_valid_i   (triangle2d_valid),
     .in_ready_o   (raster_param_in_ready),
     .param_o      (raster_param),
     .out_valid_o  (raster_param_valid),
-    .out_ready_i  (raster_param_ready)
+    .out_ready_i  (raster_param_ready),
+    .triangle_id_o(),
+    .id_out_valid_o(),
+    .id_out_ready_i(1'b1),
+    .texture_id_i ('0),
+    .id_in_valid_i(1'b1),
+    .id_in_ready_o()
   );
 
   assign triangle2d_ready = raster_param_in_ready;
@@ -196,10 +210,12 @@ module vertex_pipeline_integration_tb;
       unique case (vertex)
         0: test_vertex = '{q16_coord(base_x), q16_coord(base_y),
                            32'sh0000_8000, 32'sh0001_0000};
-        1: test_vertex = '{q16_coord(base_x + 32'sh0000_1800), q16_coord(base_y),
-                           32'sh0000_8000, 32'sh0001_0000};
-        default: test_vertex = '{q16_coord(base_x), q16_coord(base_y + 32'sh0000_1800),
-                                32'sh0000_8000, 32'sh0001_0000};
+        1: test_vertex = '{q16_coord((base_x + 32'sh0000_1800) <<< 1),
+                           q16_coord(base_y <<< 1),
+                           32'sh0001_0000, 32'sh0002_0000};
+        default: test_vertex = '{q16_coord(base_x <<< 2),
+                                q16_coord((base_y + 32'sh0000_1800) <<< 2),
+                                32'sh0002_0000, 32'sh0004_0000};
       endcase
     end
   endfunction
@@ -323,7 +339,7 @@ module vertex_pipeline_integration_tb;
     cfg_tl_put(VERTEX_START_RENDER_ADDR, 32'h0000_0001);
   endtask
 
-  task automatic check_triangle2d(input triangle2d_t actual, input int unsigned index);
+  task automatic check_triangle2d(input triangle_t actual, input int unsigned index);
     vec4_t v0;
     vec4_t v1;
     vec4_t v2;
@@ -334,6 +350,12 @@ module vertex_pipeline_integration_tb;
     logic signed [COORD_WIDTH-1:0] cx;
     logic signed [COORD_WIDTH-1:0] cy;
     logic signed [2*COORD_WIDTH+2:0] area;
+    logic signed [UVQ_WIDTH-1:0] expected_buq;
+    logic signed [UVQ_WIDTH-1:0] expected_bvq;
+    logic signed [UVQ_WIDTH-1:0] expected_bq;
+    logic signed [UVQ_WIDTH-1:0] expected_cuq;
+    logic signed [UVQ_WIDTH-1:0] expected_cvq;
+    logic signed [UVQ_WIDTH-1:0] expected_cq;
     begin
       v0 = test_vertex(index, 0);
       v1 = test_vertex(index, 1);
@@ -341,10 +363,17 @@ module vertex_pipeline_integration_tb;
 
       ax = viewport_x(v0[0]);
       ay = viewport_y(v0[1]);
-      bx = viewport_x(v1[0]);
-      by = viewport_y(v1[1]);
-      cx = viewport_x(v2[0]);
-      cy = viewport_y(v2[1]);
+      bx = viewport_x(v1[0] >>> 1);
+      by = viewport_y(v1[1] >>> 1);
+      cx = viewport_x(v2[0] >>> 2);
+      cy = viewport_y(v2[1] >>> 2);
+
+      expected_buq = HALF_Q24;
+      expected_bvq = '0;
+      expected_bq = HALF_Q24;
+      expected_cuq = '0;
+      expected_cvq = QUARTER_Q24;
+      expected_cq = QUARTER_Q24;
 
       area = ($signed({bx[COORD_WIDTH-1], bx}) - $signed({ax[COORD_WIDTH-1], ax}))
            * ($signed({cy[COORD_WIDTH-1], cy}) - $signed({ay[COORD_WIDTH-1], ay}))
@@ -360,6 +389,13 @@ module vertex_pipeline_integration_tb;
         by = cy;
         cx = tx;
         cy = ty;
+
+        expected_buq = '0;
+        expected_bvq = QUARTER_Q24;
+        expected_bq = QUARTER_Q24;
+        expected_cuq = HALF_Q24;
+        expected_cvq = '0;
+        expected_cq = HALF_Q24;
       end
 
       if (actual.ax !== ax || actual.ay !== ay ||
@@ -382,6 +418,14 @@ module vertex_pipeline_integration_tb;
                actual.az, actual.bz, actual.cz);
         errcnt++;
       end
+
+      if (actual.auq !== '0 || actual.avq !== '0 || actual.aq !== ONE_Q24
+          || actual.buq !== expected_buq || actual.bvq !== expected_bvq
+          || actual.bq !== expected_bq || actual.cuq !== expected_cuq
+          || actual.cvq !== expected_cvq || actual.cq !== expected_cq) begin
+        $error("triangle2d[%0d] perspective attribute mismatch", index);
+        errcnt++;
+      end
     end
   endtask
 
@@ -394,9 +438,27 @@ module vertex_pipeline_integration_tb;
       cycle_count <= cycle_count + 1;
 
       if (triangle2d_valid && triangle2d_ready) begin
-        if (triangle2d_count >= NUM_TRIS) begin
+        if (triangle2d_count > NUM_TRIS) begin
           $error("unexpected extra triangle2d output");
           errcnt++;
+        end else if (triangle2d_count == NUM_TRIS) begin
+          if (triangle2d.triangle_id !== {TRIANGLE_ID_WIDTH{1'b1}}
+              || triangle2d.ax !== COORD_WIDTH'(960)
+              || triangle2d.ay !== COORD_WIDTH'(540)
+              || triangle2d.bx !== COORD_WIDTH'(963)
+              || triangle2d.by !== COORD_WIDTH'(540)
+              || triangle2d.cx !== COORD_WIDTH'(960)
+              || triangle2d.cy !== COORD_WIDTH'(542)
+              || triangle2d.az !== {DEPTH_WIDTH{1'b1}}
+              || triangle2d.bz !== {DEPTH_WIDTH{1'b1}}
+              || triangle2d.cz !== {DEPTH_WIDTH{1'b1}}) begin
+            $error("completion triangle mismatch: id=%0d A(%0d,%0d) B(%0d,%0d) C(%0d,%0d)",
+                   triangle2d.triangle_id,
+                   triangle2d.ax, triangle2d.ay,
+                   triangle2d.bx, triangle2d.by,
+                   triangle2d.cx, triangle2d.cy);
+            errcnt++;
+          end
         end else begin
           check_triangle2d(triangle2d, triangle2d_count);
         end
@@ -432,21 +494,21 @@ module vertex_pipeline_integration_tb;
     repeat (300) @(posedge clk);
     raster_param_ready = 1'b1;
 
-    while (raster_param_count < NUM_TRIS && cycle_count < 5000) begin
+    while (raster_param_count < NUM_TRIS + 1 && cycle_count < 5000) begin
       @(posedge clk);
     end
 
     repeat (20) @(posedge clk);
 
-    if (triangle2d_count !== NUM_TRIS) begin
+    if (triangle2d_count !== NUM_TRIS + 1) begin
       $error("triangle2d output count mismatch: expected %0d got %0d",
-             NUM_TRIS, triangle2d_count);
+             NUM_TRIS + 1, triangle2d_count);
       errcnt++;
     end
 
-    if (raster_param_count !== NUM_TRIS) begin
+    if (raster_param_count !== NUM_TRIS + 1) begin
       $error("raster_param output count mismatch: expected %0d got %0d",
-             NUM_TRIS, raster_param_count);
+             NUM_TRIS + 1, raster_param_count);
       errcnt++;
     end
 

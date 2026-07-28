@@ -5,6 +5,7 @@ module vertex_processor_tb;
   localparam int DATA_WIDTH = 32;
   localparam int OUT_WIDTH = DATA_WIDTH;
   localparam int TRI_ID_WIDTH = 10;
+  localparam int OUT_ID_WIDTH = TRI_ID_WIDTH + 1;
   localparam int VTX_ID_WIDTH = 2;
 
   typedef logic signed [DATA_WIDTH-1:0] data_t;
@@ -33,7 +34,7 @@ module vertex_processor_tb;
 
   logic out_valid;
   logic out_ready;
-  logic [TRI_ID_WIDTH-1:0] out_id;
+  logic [OUT_ID_WIDTH-1:0] out_id;
   out_t out_vec[3:0];
 
   int unsigned errcnt;
@@ -276,7 +277,7 @@ module vertex_processor_tb;
   endtask
 
   task automatic wait_and_check_output(
-      input logic [TRI_ID_WIDTH-1:0] expected_id,
+      input logic [OUT_ID_WIDTH-1:0] expected_id,
       input out_vector_t expected_vec,
       input string name,
       input logic expected_valid
@@ -541,10 +542,25 @@ module vertex_processor_tb;
       for (int vtx = 0; vtx < NUM_VERTS; vtx = vtx + 1) begin
         name = $sformatf("camera%0d_tri%0d_p%0d", camera_id, triangle_idx, vtx);
         wait_and_check_output(
-            TRI_ID_WIDTH'(triangle_idx), expected[triangle_idx][vtx], name, vtx == 0);
+            OUT_ID_WIDTH'(triangle_idx), expected[triangle_idx][vtx], name, vtx == 0);
         stage_pause($sformatf("after %s output check", name));
       end
     end
+
+    // The vertex processor appends a reserved completion triangle after the
+    // final transformed triangle. Its first vertex carries valid and ID 2047.
+    wait_and_check_output(
+        {OUT_ID_WIDTH{1'b1}},
+        '{32'sh0000_0000, 32'sh0000_0000, 32'sh0001_0000, 32'sh0001_0000},
+        $sformatf("camera%0d_completion_p0", camera_id), 1'b1);
+    wait_and_check_output(
+        {OUT_ID_WIDTH{1'b1}},
+        '{32'sh0000_0100, 32'sh0000_0000, 32'sh0001_0000, 32'sh0001_0000},
+        $sformatf("camera%0d_completion_p1", camera_id), 1'b0);
+    wait_and_check_output(
+        {OUT_ID_WIDTH{1'b1}},
+        '{32'sh0000_0000, 32'shffff_ff00, 32'sh0001_0000, 32'sh0001_0000},
+        $sformatf("camera%0d_completion_p2", camera_id), 1'b0);
     $display("[vertex_processor_tb] camera%0d: done", camera_id);
   endtask
 

@@ -21,7 +21,9 @@ def load_elf_to_mem(mem, filename_in, verbose=False):
                 print(f"{section.name:>12s}: start=0x{addr_start:08x}, length=0x{length:08x} ({length:>8,} bytes)")
             addr_end = addr_start+length
             if addr_end > len(mem):
-                raise Exception("ELF file exceeds allocated memory size.")
+                #raise Exception("ELF file exceeds allocated memory size.")
+                print("Warning: ELF file larger than maximum memfile size. Not generating memfile.")
+                return 0
             max_addr = max(max_addr, addr_end)
             mem[addr_start:addr_start+length] = data
 

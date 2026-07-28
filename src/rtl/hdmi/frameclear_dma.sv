@@ -33,8 +33,6 @@ module frameclear_dma #(
 		.devmode_i('1)
 	);
 
-	// TODO: add depth buffer support
-
 	logic [ 1:0] clear_fbid;
 	logic [23:0] clear_color;
 	logic        clear_mode;
@@ -126,7 +124,7 @@ module frameclear_dma #(
 			default: '0
 		};
 		if (clear_mode) begin
-			ddr_o.a_address = {4'h1, clear_fbid, cy_q, cx_q};
+			ddr_o.a_address = {4'h2, clear_fbid, cy_q, cx_q};
 			ddr_o.a_data = '0;
 		end else begin
 			ddr_o.a_address = {3'h0, clear_fbid, cy_q, cx_q[5:0], 2'(state_q)};

@@ -1,8 +1,10 @@
 build/
-__pycache__
+
+__pycache__/
 docs/_build/
 vivado*.jou
 vivado*.log
 .Xil/
+.venv
 obj_dir/
 localdata/

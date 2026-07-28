@@ -1,234 +1,203 @@
 /* SPDX-License-Identifier: CC0-1.0
- * SPDX-FileCopyrightText: 2024 RVLab Contributors
+ * SPDX-FileCopyrightText: 2026 RVLab Contributors
  */
 
 #include <stdint.h>
+#include <stdio.h>
 #include <rvlab.h>
+
 #include "graphics_math.h"
+#include "camera.h"
+#include "memcpy.h"
+#include "graphics_pipeline.h"
+#include "geometry.h"
+#include "dram_addrmap.h"
 
-#define SCREEN_WIDTH  1920
-#define SCREEN_HEIGHT 1080
+#define TRIANGLE_COUNT 2048u
+#define CAM_LERP_SPEED 0x00003000
 
-#define Q16_ONE 65536
+static triangle_t cube_triangles[TRIANGLE_COUNT];
 
-#define CUBE_SIZE     150
-#define CAMERA_Z      760
-#define CAMERA_NEAR   10
-#define CAMERA_FAR    1200
-
-#define INITIAL_PHASE 16u
-#define DISPLAY_SWITCH_CYCLES 1000000u
-#define HW_RENDER_WAIT_CYCLES  4000000u
-
-#define BUFFER_A 0u
-#define BUFFER_B 1u
-
-#define TRI2D_FBID_COLOR 0x08u
-#define TRI2D_FBID_DEPTH 0x0cu
-
-typedef struct {
-    int16_t x;
-    int16_t y;
-    int16_t z;
-} cube_vertex_t;
-
-typedef struct {
-    uint8_t a;
-    uint8_t b;
-    uint8_t c;
-} triangle_index_t;
-
-static const cube_vertex_t cube_vertices[8] = {
-    {-CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE},
-    { CUBE_SIZE, -CUBE_SIZE, -CUBE_SIZE},
-    { CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE},
-    {-CUBE_SIZE,  CUBE_SIZE, -CUBE_SIZE},
-    {-CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE},
-    { CUBE_SIZE, -CUBE_SIZE,  CUBE_SIZE},
-    { CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE},
-    {-CUBE_SIZE,  CUBE_SIZE,  CUBE_SIZE},
-};
-
-static const triangle_index_t cube_triangles[12] = {
-    {0, 1, 2}, {0, 2, 3},
-    {4, 6, 5}, {4, 7, 6},
-    {0, 3, 7}, {0, 7, 4},
-    {1, 5, 6}, {1, 6, 2},
-    {0, 4, 5}, {0, 5, 1},
-    {3, 2, 6}, {3, 6, 7},
-};
-
-static void wait_cycles(uint32_t cycles) {
-    uint32_t start = (uint32_t)read_csr("mcycle");
-
-    while ((uint32_t)((uint32_t)read_csr("mcycle") - start) < cycles);
-}
-
-static void cmd_enable_hdmi(uint8_t fbid) {
-    REG32(HDMI_CTRL_FBID(0)) = fbid;
-    REG32(HDMI_CTRL_CTRL(0)) =
-        (1u << HDMI_CTRL_CTRL_PHY_ENABLE_LSB)
-        | (1u << HDMI_CTRL_CTRL_FETCH_ENABLE_LSB);
-}
-
-static void cmd_clear_buffers(
-    uint8_t fbid,
-    uint8_t red,
-    uint8_t green,
-    uint8_t blue
-) {
-    REG32(FRAMECLEAR_DMA_FBID(0)) = fbid;
-    REG32(FRAMECLEAR_DMA_CLEAR_COLOR(0)) =
-        ((uint32_t)red << 16) | ((uint32_t)green << 8) | blue;
-
-    REG32(FRAMECLEAR_DMA_MODE(0)) = 0;
-    REG32(FRAMECLEAR_DMA_STATUS(0)) = 1;
-    while (REG32(FRAMECLEAR_DMA_STATUS(0)));
-
-    REG32(FRAMECLEAR_DMA_MODE(0)) = 1;
-    REG32(FRAMECLEAR_DMA_STATUS(0)) = 1;
-    while (REG32(FRAMECLEAR_DMA_STATUS(0)));
-}
-
-static int32_t sin_q14(uint8_t phase) {
-    uint32_t half_phase = phase & 0x7fu;
-    uint32_t x = half_phase <= 64u ? half_phase : 128u - half_phase;
-    int32_t value = (int32_t)(x * (128u - x) * 4u);
-
-    return (phase & 0x80u) ? -value : value;
-}
-
-static int32_t cos_q14(uint8_t phase) {
-    return sin_q14((uint8_t)(phase + 64u));
-}
-
-static fixed_t int_to_q16(int32_t value) {
-    return value * Q16_ONE;
-}
-
-static fixed_t scaled_q16_from_q14(int32_t value_q14, int32_t scale) {
-    return (fixed_t)(((int64_t)value_q14 * scale * Q16_ONE) >> 14);
-}
-
-static uint32_t vertex_vec_addr(
-    uint32_t triangle,
-    uint32_t vertex,
-    uint32_t lane
-) {
-    return VERTEX_DATA0_BASE_ADDR | (triangle << 6) | (vertex << 4) | (lane << 2);
-}
-
-static uint8_t triangle_vertex_index(uint32_t triangle, uint32_t vertex) {
-    if (vertex == 0) return cube_triangles[triangle].a;
-    if (vertex == 1) return cube_triangles[triangle].b;
-    return cube_triangles[triangle].c;
-}
-
-static void cmd_load_cube_vertices(void) {
-    for (uint32_t triangle = 0; triangle < 12; triangle++) {
-        for (uint32_t vertex = 0; vertex < 3; vertex++) {
-            const cube_vertex_t *source = &cube_vertices[
-                triangle_vertex_index(triangle, vertex)
-            ];
-
-            REG32(vertex_vec_addr(triangle, vertex, 0)) =
-                (uint32_t)int_to_q16(source->x);
-            REG32(vertex_vec_addr(triangle, vertex, 1)) =
-                (uint32_t)int_to_q16(source->y);
-            REG32(vertex_vec_addr(triangle, vertex, 2)) =
-                (uint32_t)int_to_q16(source->z);
-            REG32(vertex_vec_addr(triangle, vertex, 3)) =
-                (uint32_t)Q16_ONE;
-        }
-    }
-}
-
-static void cmd_set_raster_buffers(uint8_t color_fbid, uint8_t depth_fbid) {
-    REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_FBID_COLOR) = color_fbid & 0x3u;
-    REG32(TRIANGLE2D_INPUT0_BASE_ADDR + TRI2D_FBID_DEPTH) = depth_fbid & 0x3u;
-}
-
-static void cmd_write_vertex_matrix(uint8_t phase) {
-    int32_t camera_sin = sin_q14(phase);
-    int32_t camera_cos = cos_q14(phase);
-
-    vec3_t eye = {
-        int_to_q16(0),
-        scaled_q16_from_q14(camera_sin, CAMERA_Z),
-        scaled_q16_from_q14(camera_cos, CAMERA_Z),
-    };
-    vec3_t center = {
-        int_to_q16(0),
-        int_to_q16(0),
-        int_to_q16(0),
-    };
-    vec3_t up = {
-        int_to_q16(0),
-        scaled_q16_from_q14(camera_cos, 1),
-        -scaled_q16_from_q14(camera_sin, 1),
-    };
-    matrix_t view;
-    matrix_t projection;
-    matrix_t view_projection;
-    fixed_t near = int_to_q16(CAMERA_NEAR);
-    fixed_t far = int_to_q16(CAMERA_FAR);
-    fixed_t far_minus_near = far - near;
-
-    lookat_mat(view, eye, center, up);
-    persp_proj_mat(
-        projection,
-        60,
-        fixed_div(int_to_q16(SCREEN_HEIGHT), int_to_q16(SCREEN_WIDTH)),
-        far,
-        near
-    );
-
-    projection[2][2] = fixed_div(near, far_minus_near);
-    projection[2][3] = fixed_div(fixed_mul(far, near), far_minus_near);
-
-    mat_mat_mul(view_projection, projection, view);
-
-    for (uint32_t row = 0; row < 4; row++) {
-        for (uint32_t column = 0; column < 4; column++) {
-            REG32(VERTEX_CFG0_BASE_ADDR + ((row * 4 + column) << 2)) =
-                (uint32_t)view_projection[row][column];
-        }
-    }
-}
-
-static void cmd_start_cube_hw(uint8_t phase, uint8_t color_fbid, uint8_t depth_fbid) {
-    cmd_set_raster_buffers(color_fbid, depth_fbid);
-    cmd_write_vertex_matrix(phase);
-    REG32(VERTEX_PROCESSOR_TRIANGLE_COUNT(0)) = 11;
-    REG32(VERTEX_PROCESSOR_START_RENDER(0)) = 1;
-}
+char ibuf_getc();
+char ibuf_getc_nonblocking();
 
 int main(void) {
-    uint8_t phase = INITIAL_PHASE;
-    uint8_t display_fbid = BUFFER_A;
-    uint8_t render_fbid = BUFFER_A;
+	matrix_t proj_matrix;
+	matrix_t camera_matrix;
+	camera_t camera, smooth_camera;
+	init_camera(&camera);
+	init_camera(&smooth_camera);
+	get_default_proj_mat(proj_matrix);
 
-    if (ddr_init()) {
-        while (1);
-    }
+	camera.pos[2] = 0x00040000;
+	smooth_camera.pos[2] = 0x00040000;
 
-    cmd_load_cube_vertices();
-    cmd_clear_buffers(render_fbid, 2, 4, 12);
-    cmd_start_cube_hw(phase, render_fbid, render_fbid);
-    wait_cycles(HW_RENDER_WAIT_CYCLES);
-    cmd_enable_hdmi(display_fbid);
+	camera.azimuth = 0x00800000;
+	smooth_camera.azimuth = 0x00800000;
 
-    while (1) {
-        wait_cycles(DISPLAY_SWITCH_CYCLES);
+	buf_id_t draw_color = 1u;
+	buf_id_t draw_depth = 0u;
+	uint8_t camera_phase = 0u;
+	uint32_t frame_start;
+	uint32_t frame = 0u;
+	uint32_t init = 0u;
 
-        phase = (uint8_t)(phase + 2u);
-        render_fbid = display_fbid == BUFFER_A ? BUFFER_B : BUFFER_A;
+	if (ddr_init()) {
+		printf("DDR initialization failed\n");
+		//while (1);
+	}
 
-        cmd_clear_buffers(render_fbid, 2, 4, 12);
-        cmd_start_cube_hw(phase, render_fbid, render_fbid);
-        wait_cycles(HW_RENDER_WAIT_CYCLES);
+	uint32_t cube_triangle_count;
 
-        display_fbid = render_fbid;
-        cmd_enable_hdmi(display_fbid);
-    }
+	make_cube(cube_triangles, 4, &cube_triangle_count);
+	clear_buffers();
+	enable_hdmi();
+
+	int state = 0; // 0-7 = slides, 8 = monke, 9 = bad apple animation
+
+	printf("Starting main loop!\n");
+
+	uint32_t animation_frame_cycles = REG32(FRAME_CYC_ADDR);
+	uint32_t total_animation_frames = REG32(ANIM_FCNT_ADDR);
+
+	write_geometry(cube_triangles, cube_triangle_count);
+	load_palette((uint32_t *)PALETTE_BASE);
+
+	frame_start = read_csr("mcycle");
+	init = frame_start;
+	while (1) {
+		frame_start = read_csr("mcycle");
+		uint32_t frameid = ((frame_start - init) / animation_frame_cycles) % total_animation_frames;
+
+		// Update smooth camera to track camera via linear interpolation
+		smooth_camera.pos[0] = fixed_lerp(smooth_camera.pos[0], camera.pos[0], CAM_LERP_SPEED);
+		smooth_camera.pos[1] = fixed_lerp(smooth_camera.pos[1], camera.pos[1], CAM_LERP_SPEED);
+		smooth_camera.pos[2] = fixed_lerp(smooth_camera.pos[2], camera.pos[2], CAM_LERP_SPEED);
+		smooth_camera.azimuth = fixed_lerp(smooth_camera.azimuth, camera.azimuth, CAM_LERP_SPEED);
+		smooth_camera.elevation = fixed_lerp(smooth_camera.elevation, camera.elevation, CAM_LERP_SPEED);
+
+		switch (state) {
+			case 0:
+			case 1:
+			case 2:
+			case 3:
+			case 4:
+			case 5:
+			case 6:
+			case 7: {
+				load_slide_to_fb(draw_color, state);
+				break;
+			}
+			case 9:
+				load_textures(0, (uint32_t *)(VIDEO_BASE + (frameid << 14)), 16);
+			case 8: {
+				get_camera_matrix(camera_matrix, &smooth_camera, proj_matrix);
+				write_camera_matrix(camera_matrix);
+				render_frame(draw_color, draw_depth);
+				update_fps_display(draw_color);
+				break;
+			}
+			default: ;
+		}
+
+		set_hdmi_fbid(draw_color);
+
+		frame++;
+
+		advance_buffers(&draw_color, &draw_depth);
+		if (frame % 3 == 0) camera_phase = (uint8_t)(camera_phase + 1u);
+
+		bool is_switching_scene = false;
+
+		// Process inputs
+		char selected_char;
+		while ((selected_char = ibuf_getc_nonblocking())) {
+			switch (selected_char) {
+				case 'e': {
+					state = (state + 1) % 10;
+					is_switching_scene = true;
+					break;
+				}
+				case 'q': {
+					state = (state + 9) % 10;
+					is_switching_scene = true;
+					break;
+				}
+				case 'j': {
+					camera.azimuth += 0x00040000;
+					break;
+				}
+				case 'l': {
+					camera.azimuth -= 0x00040000;
+					break;
+				}
+				case 'i': {
+					camera.elevation += 0x00020000;
+					break;
+				}
+				case 'k': {
+					camera.elevation -= 0x00020000;
+					break;
+				}
+				case 'w': {
+					fixed_t fwd_x = fixed_sin(camera.azimuth);
+					fixed_t fwd_z = fixed_cos(camera.azimuth);
+					camera.pos[0] += fixed_mul(fwd_x, CAMERA_MOVE_SPEED);
+					camera.pos[2] += fixed_mul(fwd_z, CAMERA_MOVE_SPEED);
+					break;
+				}
+				case 's': {
+					fixed_t fwd_x = fixed_sin(camera.azimuth);
+					fixed_t fwd_z = fixed_cos(camera.azimuth);
+					camera.pos[0] -= fixed_mul(fwd_x, CAMERA_MOVE_SPEED);
+					camera.pos[2] -= fixed_mul(fwd_z, CAMERA_MOVE_SPEED);
+					break;
+				}
+				case 'd': {
+					fixed_t right_x = fixed_cos(camera.azimuth);
+					fixed_t right_z = -fixed_sin(camera.azimuth);
+					camera.pos[0] -= fixed_mul(right_x, CAMERA_MOVE_SPEED);
+					camera.pos[2] -= fixed_mul(right_z, CAMERA_MOVE_SPEED);
+					break;
+				}
+				case 'a': {
+					fixed_t right_x = fixed_cos(camera.azimuth);
+					fixed_t right_z = -fixed_sin(camera.azimuth);
+					camera.pos[0] += fixed_mul(right_x, CAMERA_MOVE_SPEED);
+					camera.pos[2] += fixed_mul(right_z, CAMERA_MOVE_SPEED);
+					break;
+				}
+			    case ' ': {
+			    	camera.pos[1] += CAMERA_MOVE_SPEED;
+			    	break;
+			    }
+			    case 'c': {
+			    	camera.pos[1] -= CAMERA_MOVE_SPEED;
+			    	break;
+			    }
+				default: ;
+			}
+		}
+
+		if (is_switching_scene) {
+			switch (state) {
+				case 8: {
+					uint32_t tricount = REG32(MESH_SIZE_ADDR);
+					write_geometry((triangle_t *)MESH_BASE, tricount);
+					set_texture_checkered(0, 0, 1);
+					set_palette_color(0, 5, 5, 5);
+					set_palette_color(1, 200, 200, 200);
+					break;
+				}
+				case 9:
+					init = frame_start;
+					write_geometry(cube_triangles, cube_triangle_count);
+					load_palette((uint32_t *)PALETTE_BASE);
+					break;
+				default: ;
+			}
+		}
+	}
+
+	return 0;
 }

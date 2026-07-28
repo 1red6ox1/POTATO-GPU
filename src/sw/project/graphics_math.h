@@ -3,6 +3,8 @@
 
 #include "matrix_math.h"
 
+#define FIXED_ONE 0x00010000
+
 extern const fixed_t fov_coeff_lut [46]; // values for FOVy between 45-90 (inclusive)
 
 void persp_proj_mat(matrix_t dest, uint8_t fovy, fixed_t inverse_aspect, fixed_t far, fixed_t near);
