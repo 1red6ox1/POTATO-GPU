@@ -72,7 +72,8 @@ module_tbs = [
     "vertex_post_to_triangle2d_tb",
     "vertex_pipeline_integration_tb",
     "rasterizer_simple_tb",
-    "pixel_fetcher_tb"
+    "pixel_fetcher_tb",
+    "ddr_mux_tb"
 ]
 
 for name in module_tbs:
