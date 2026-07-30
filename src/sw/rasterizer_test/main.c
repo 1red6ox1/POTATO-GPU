@@ -50,8 +50,7 @@ static int rasterization_completed(void) {
 	return REG32(RASTERIZER_STATUS_STATUS(0)) & RASTERIZER_STATUS_STATUS_VALID_MASK;
 }
 
-static void draw_triangle(uint32_t id, const vertex_t *a,
-	const vertex_t *b, const vertex_t *c) {
+static void draw_triangle(uint32_t id, const vertex_t *a, const vertex_t *b, const vertex_t *c) {
 	while (REG32(TRIANGLE_INPUT_STATUS(0)) & TRIANGLE_INPUT_STATUS_VALID_MASK);
 
 	REG32(TRIANGLE_INPUT_FBID_COLOR(0)) = 0u;
@@ -78,6 +77,8 @@ static void draw_triangle(uint32_t id, const vertex_t *a,
 	REG32(TRIANGLE_INPUT_SUBMIT(0)) = TRIANGLE_INPUT_SUBMIT_VALID_MASK;
 }
 
+// Visual rasterizer test that renders several textured triangles and displays the result through HDMI.
+// checks whole rasterization pipeline
 int main(void) {
 	static const vertex_t first_a = { 360,  80, 0x1800, 0, 0, 1 << 24 };
 	static const vertex_t first_b = {1000, 650, 0x2600, 1 << 24, 0, 1 << 24 };

@@ -57,6 +57,23 @@ module rasterizer_simple_tb;
 	logic line_out_valid;
 	logic line_out_ready;
 
+	logic tile_fifo_in_valid;
+	logic tile_fifo_in_ready;
+	logic [TILE_X_WIDTH-1:0] tile_fifo_in_x;
+	logic [TILE_Y_WIDTH-1:0] tile_fifo_in_y;
+	logic signed [EDGE_WIDTH-1:0] tile_fifo_in_e1;
+	logic signed [EDGE_WIDTH-1:0] tile_fifo_in_e2;
+	logic signed [EDGE_WIDTH-1:0] tile_fifo_in_e3;
+	logic tile_fifo_in_reject;
+	logic [TILE_X_WIDTH-1:0] tile_fifo_out_x;
+	logic [TILE_Y_WIDTH-1:0] tile_fifo_out_y;
+	logic signed [EDGE_WIDTH-1:0] tile_fifo_out_e1;
+	logic signed [EDGE_WIDTH-1:0] tile_fifo_out_e2;
+	logic signed [EDGE_WIDTH-1:0] tile_fifo_out_e3;
+	logic tile_fifo_out_reject;
+	logic tile_fifo_out_valid;
+	logic tile_fifo_out_ready;
+
 	logic tile_reject_out;
 	logic signed [EDGE_WIDTH-1:0] tile_e1;
 	logic signed [EDGE_WIDTH-1:0] tile_e2;
@@ -179,6 +196,31 @@ module rasterizer_simple_tb;
 		.out_ready_i  (line_out_ready)
 	);
 
+	tile_fifo #(
+		.Depth (2)
+	) tile_fifo_i (
+		.clk_i        (clk),
+		.rst_ni       (rst_n),
+		.tile_x_i    (tile_fifo_in_x),
+		.tile_y_i    (tile_fifo_in_y),
+		.param_i     (param),
+		.e1_i        (tile_fifo_in_e1),
+		.e2_i        (tile_fifo_in_e2),
+		.e3_i        (tile_fifo_in_e3),
+		.reject_i    (tile_fifo_in_reject),
+		.in_valid_i  (tile_fifo_in_valid),
+		.in_ready_o  (tile_fifo_in_ready),
+		.tile_x_o    (tile_fifo_out_x),
+		.tile_y_o    (tile_fifo_out_y),
+		.param_o     (),
+		.e1_o        (tile_fifo_out_e1),
+		.e2_o        (tile_fifo_out_e2),
+		.e3_o        (tile_fifo_out_e3),
+		.reject_o    (tile_fifo_out_reject),
+		.out_valid_o (tile_fifo_out_valid),
+		.out_ready_i (tile_fifo_out_ready)
+	);
+
 	tile_reject tile_reject_i (
 		.param_i  (param),
 		.tile_x_i ('0),
@@ -286,6 +328,14 @@ module rasterizer_simple_tb;
 		mask_out_ready = 1'b0;
 		line_in_valid = 1'b0;
 		line_out_ready = 1'b0;
+		tile_fifo_in_valid = 1'b0;
+		tile_fifo_in_x = '0;
+		tile_fifo_in_y = '0;
+		tile_fifo_in_e1 = '0;
+		tile_fifo_in_e2 = '0;
+		tile_fifo_in_e3 = '0;
+		tile_fifo_in_reject = 1'b0;
+		tile_fifo_out_ready = 1'b0;
 		core_in_valid = 1'b0;
 		core_out_ready = 1'b0;
 		triangle_in_valid = 1'b0;
@@ -547,6 +597,45 @@ module rasterizer_simple_tb;
 		#1;
 		check(tile_reject_out, "tile_reject: negative tile was accepted");
 
+		// tile_reject: a positive vertical edge slope can make a tile intersect
+		// even when the edge value at its upper-left corner is negative.
+		param = '0;
+		param.e1 = -28'sd1;
+		param.dx1 = COORD_WIDTH'(1);
+		#1;
+		check(!tile_reject_out,
+			"tile_reject: tile with a positive maximum was rejected");
+
+		// tile_fifo: retain the complete tile payload while the consumer stalls.
+		param = '0;
+		param.triangle_id = 11'd21;
+		tile_fifo_in_x = 6'd7;
+		tile_fifo_in_y = 8'd9;
+		tile_fifo_in_e1 = -28'sd11;
+		tile_fifo_in_e2 = 28'sd22;
+		tile_fifo_in_e3 = 28'sd33;
+		tile_fifo_in_reject = 1'b1;
+		@(negedge clk);
+		tile_fifo_in_valid = 1'b1;
+		@(negedge clk);
+		tile_fifo_in_valid = 1'b0;
+		while (!tile_fifo_out_valid) @(posedge clk);
+		#1;
+		check(tile_fifo_out_x == 6'd7 && tile_fifo_out_y == 8'd9,
+			"tile_fifo: tile coordinates were not preserved");
+		check(tile_fifo_out_e1 == -28'sd11 && tile_fifo_out_e2 == 28'sd22
+			&& tile_fifo_out_e3 == 28'sd33 && tile_fifo_out_reject,
+			"tile_fifo: tile payload was not preserved");
+		repeat (2) begin
+			@(posedge clk);
+			check(tile_fifo_out_valid,
+				"tile_fifo: valid payload was not held under backpressure");
+		end
+		tile_fifo_out_ready = 1'b1;
+		@(posedge clk);
+		@(negedge clk);
+		tile_fifo_out_ready = 1'b0;
+
 		// triangle_core: a one-tile bounding box produces exactly that tile.
 		param = '0;
 		param.triangle_id = 11'd9;
@@ -589,6 +678,39 @@ module rasterizer_simple_tb;
 		check(core_out_valid && core_tile_x == 6'd3 && core_tile_y == 8'd4,
 			"triangle_core: second tile of row mismatch");
 		@(posedge clk);
+		@(negedge clk);
+		core_out_ready = 1'b0;
+
+		// triangle_core: a two-by-two bounding box advances across a row before
+		// moving to the next row.
+		param = '0;
+		param.bbox_min_x = 6'd6;
+		param.bbox_max_x = 6'd7;
+		param.bbox_min_y = 8'd10;
+		param.bbox_max_y = 8'd11;
+		@(negedge clk);
+		core_in_valid = 1'b1;
+		@(negedge clk);
+		core_in_valid = 1'b0;
+		while (!core_out_valid) @(posedge clk);
+		#1;
+		check(core_tile_x == 6'd6 && core_tile_y == 8'd10,
+			"triangle_core: two-by-two first tile mismatch");
+		core_out_ready = 1'b1;
+		@(posedge clk);
+		#1;
+		check(core_out_valid && core_tile_x == 6'd7 && core_tile_y == 8'd10,
+			"triangle_core: two-by-two second tile mismatch");
+		@(posedge clk);
+		#1;
+		check(core_out_valid && core_tile_x == 6'd6 && core_tile_y == 8'd11,
+			"triangle_core: two-by-two third tile mismatch");
+		@(posedge clk);
+		#1;
+		check(core_out_valid && core_tile_x == 6'd7 && core_tile_y == 8'd11,
+			"triangle_core: two-by-two fourth tile mismatch");
+		@(posedge clk);
+		@(negedge clk);
 		core_out_ready = 1'b0;
 
 		// triangle_param: one visible right triangle with constant attributes.
