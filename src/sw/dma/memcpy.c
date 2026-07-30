@@ -10,5 +10,13 @@ void memcpy_soft(void *dest, void *src, uint32_t length) {
 }
 
 void memcpy_dma(void *dest, void *src, uint32_t length) {
-    // implement me
+    volatile dma_descriptor_t d;
+    
+    d.operation = DMA_OP_MEMCPY;
+    d.dst_adr   = (uint32_t) dest;
+    d.src_adr   = (uint32_t) src;
+    d.length    = length;
+    
+    dma_write_desc(&d);
+    dma_wait();
 }

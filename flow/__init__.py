@@ -11,6 +11,7 @@ from .simlibs_questa import SimlibsQuesta
 from .module_tb import ModuleTb
 from .sources import Sources
 from .reggen import RegisterGenerator
+from .project_utils import ProjectUtils
 from .ddr3_model import Ddr3Model
 
 flow = Flow()
@@ -27,13 +28,16 @@ sw_dirs = [
     "test_irq",
     "rlight",
     "dma",
+    "doom",
     "project",
 ]
 
 flow['libsys'] = Libsys(dependency_map={'reggen': 'reggen'})
 for sw_dir in sw_dirs:
     flow[f'sw_{sw_dir}'] = Program(sw_dir, dependency_map={
-        'libsys':'libsys', 'ref':'sw_test_rvlab', 'reggen': 'reggen'})
+        'libsys':'libsys', 'ref':'sw_project', 'reggen': 'reggen'})
+
+flow['project_utils'] = ProjectUtils(dependency_map={'sw_project': 'sw_project'})
 
 # Hardware
 # --------
@@ -45,7 +49,7 @@ flow['ddr3_model'] = Ddr3Model()
 flow['srcs'] = Sources(dependency_map={
     'xbar': 'xbar',
     'reggen': 'reggen',
-    'swinit': 'sw_test_rvlab',
+    'swinit': 'sw_project',
     'ddr3_model': 'ddr3_model',
 })
 
@@ -58,7 +62,13 @@ flow['rvlab_fpga_top'] = RvlabFpgaTop(dependency_map={'srcs':'srcs'})
 module_tbs = [
     "student_rlight_tb",
     "student_tlul_mux_tb",
-    "hdmi_tb"
+    "matmul_tb",
+    "hdmi_tb",
+    "dpram_tb",
+    "vertex_processor_tb",
+    "vertex_triangle_collector_tb",
+    "vertex_post_tb",
+    "vertex_pipeline_integration_tb",
 ]
 
 for name in module_tbs:

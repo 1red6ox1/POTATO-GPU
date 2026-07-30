@@ -1,0 +1,20 @@
+// Copyright 2026 Ruslan Kharasov.
+
+{
+  name: "rasterizer_status"
+  clock_primary: "sys_clk"
+  bus_device: "tlul"
+  regwidth: "32"
+  registers: [
+    {
+      name: "status"
+      desc: "Rasterizer completion status"
+      swaccess: "rw1c"
+      hwaccess: "hwo"
+      fields: [
+        {bits: "0", name: "valid", desc: "Rasterizer completion status"}
+      ]
+    }
+    {reserved: 1}
+  ]
+}

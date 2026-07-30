@@ -94,6 +94,8 @@ class RvlabFpgaTop(Block):
             for k, v in srcs.defines.items():
                 defines += ['-verilog_define', f"{k}={v}"]
 
+            t("set_param general.maxThreads 1")
+
             t.synth_design(top=self.name, part=self.part,
                 directive="PerformanceOptimized",
                 flatten_hierarchy="rebuilt", # choices: full, none, rebuilt

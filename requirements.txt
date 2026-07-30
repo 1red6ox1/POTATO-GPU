@@ -6,3 +6,4 @@ pyelftools
 mistletoe
 mako
 lxml
+pillow
