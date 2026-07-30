@@ -42,18 +42,13 @@ module depth_reader #(
 	logic [TOKEN_POINTER_WIDTH-1:0] read_pointer_q;
 	logic token_valid;
 	logic token_zero;
-	logic in_fire;
-	logic out_fire;
 	logic [$clog2(Depth + 1)-1:0] request_count_q;
 
 	assign mask_empty = ~|mask_i;
 	assign ddr_data_valid = ddr_i.d_valid && ddr_i.d_opcode == AccessAckData;
 	assign token_valid = request_count_q != '0;
 	assign token_zero = zero_q[read_pointer_q];
-	assign in_fire = in_valid_i && in_ready_o;
-	assign out_fire = out_valid_o && out_ready_i;
-	assign in_ready_o = (mask_empty || !ddr_valid_q || ddr_i.a_ready)
-		&& request_count_q < $clog2(Depth + 1)'(Depth);
+	assign in_ready_o = (mask_empty || !ddr_valid_q || ddr_i.a_ready) && request_count_q < $clog2(Depth + 1)'(Depth);
 	assign out_data_o = token_zero ? '0 : response_data;
 	assign out_valid_o = token_valid && (token_zero || response_valid);
 	assign response_ready = token_valid && !token_zero && out_ready_i;
@@ -69,7 +64,7 @@ module depth_reader #(
 				ddr_valid_q <= 1'b0;
 			end
 
-			if (in_fire && !mask_empty) begin
+			if (in_valid_i && in_ready_o && !mask_empty) begin
 				fbid_q      <= fbid_i;
 				tile_x_q    <= tile_x_i;
 				y_q         <= y_i;
@@ -82,7 +77,7 @@ module depth_reader #(
 		if (~rst_ni) begin
 			request_count_q <= '0;
 		end else begin
-			unique case ({in_fire, out_fire})
+			unique case ({in_valid_i && in_ready_o, out_valid_o && out_ready_i})
 				2'b10: request_count_q <= request_count_q + 1'b1;
 				2'b01: request_count_q <= request_count_q - 1'b1;
 				default: begin
@@ -97,7 +92,7 @@ module depth_reader #(
 			write_pointer_q <= '0;
 			read_pointer_q  <= '0;
 		end else begin
-			if (in_fire) begin
+			if (in_valid_i && in_ready_o) begin
 				zero_q[write_pointer_q] <= mask_empty;
 				if (write_pointer_q == TOKEN_POINTER_WIDTH'(Depth - 1)) begin
 					write_pointer_q <= '0;
@@ -106,7 +101,7 @@ module depth_reader #(
 				end
 			end
 
-			if (out_fire) begin
+			if (out_valid_o && out_ready_i) begin
 				if (read_pointer_q == TOKEN_POINTER_WIDTH'(Depth - 1)) begin
 					read_pointer_q <= '0;
 				end else begin

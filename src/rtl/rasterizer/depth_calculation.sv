@@ -28,8 +28,8 @@ module depth_calculation #(
 
 	always_comb begin
 		z_row = DEPTH_INTERP_WIDTH'(param_i.z)
-			+ DEPTH_INTERP_WIDTH'($signed(param_i.dz_dx) * x_i)
-			+ DEPTH_INTERP_WIDTH'($signed(param_i.dz_dy) * $signed(COORD_WIDTH'(y_i)));
+			    + DEPTH_INTERP_WIDTH'($signed(param_i.dz_dx) * x_i)
+			    + DEPTH_INTERP_WIDTH'($signed(param_i.dz_dy) * $signed(COORD_WIDTH'(y_i)));
 
 		for (int x = 0; x < TILE_WIDTH; x++) begin
 			logic signed [DEPTH_INTERP_WIDTH-1:0] z_pixel;

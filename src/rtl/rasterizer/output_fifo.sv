@@ -41,10 +41,8 @@ module output_fifo #(
 
 	import rasterizer_pkg::*;
 
-	localparam int unsigned METADATA_WIDTH =
-		2 + 2 + TILE_X_WIDTH + FRAME_Y_WIDTH + TILE_WIDTH;
-	localparam int unsigned OUTPUT_WIDTH =
-		METADATA_WIDTH + TRIANGLE_ID_WIDTH + 256 + 256 + 256 + 256 + 256;
+	localparam int unsigned METADATA_WIDTH = 2 + 2 + TILE_X_WIDTH + FRAME_Y_WIDTH + TILE_WIDTH;
+	localparam int unsigned OUTPUT_WIDTH = METADATA_WIDTH + TRIANGLE_ID_WIDTH + 256 + 256 + 256 + 256 + 256;
 
 	logic [METADATA_WIDTH-1:0] metadata_i;
 	logic [METADATA_WIDTH-1:0] metadata_o;

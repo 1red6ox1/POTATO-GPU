@@ -1,5 +1,3 @@
-// Copyright 2026 Ruslan Kharasov.
-
 module rasterizer_status (
 	input logic clk_i,
 	input logic rst_ni,

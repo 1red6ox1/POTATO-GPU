@@ -38,8 +38,7 @@ module my_fifo #(
 		assign depth_o = FIFO_DEPTH_WIDTH'(valid_q);
 
 		always_ff @(posedge clk_i) begin
-			if (in_valid_i && in_ready_o
-				&& !(Pass && !valid_q && out_ready_i)) begin
+			if (in_valid_i && in_ready_o && !(Pass && !valid_q && out_ready_i)) begin
 				data_q <= in_data_i;
 			end
 		end
@@ -50,8 +49,7 @@ module my_fifo #(
 			end else if (clear_i) begin
 				valid_q <= 1'b0;
 			end else if (in_ready_o) begin
-				valid_q <= in_valid_i
-					&& !(Pass && !valid_q && out_ready_i);
+				valid_q <= in_valid_i && !(Pass && !valid_q && out_ready_i);
 			end
 		end
 	end else if (Depth <= 10 && !UseBram) begin : distributed_fifo
@@ -64,24 +62,19 @@ module my_fifo #(
 		logic [Width-1:0] data_q;
 		logic valid_q;
 
-		assign in_ready_o = depth_q < FIFO_DEPTH_WIDTH'(Depth)
-			|| (valid_q && out_ready_i);
+		assign in_ready_o = depth_q < FIFO_DEPTH_WIDTH'(Depth) || (valid_q && out_ready_i);
 		assign out_data_o = (Pass && !valid_q && depth_q == '0) ? in_data_i : data_q;
-		assign out_valid_o = valid_q
-			|| (Pass && !valid_q && depth_q == '0 && in_valid_i);
+		assign out_valid_o = valid_q || (Pass && !valid_q && depth_q == '0 && in_valid_i);
 		assign depth_o = depth_q;
 
 		always_ff @(posedge clk_i) begin
-			if (in_valid_i && in_ready_o
-				&& !(Pass && !valid_q && depth_q == '0)) begin
+			if (in_valid_i && in_ready_o && !(Pass && !valid_q && depth_q == '0)) begin
 				memory[write_pointer_q] <= in_data_i;
 			end
 
-			if ((!valid_q && depth_q != '0)
-				|| (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1))) begin
+			if ((!valid_q && depth_q != '0)	|| (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1))) begin
 				data_q <= memory[read_pointer_q];
-			end else if (Pass && !valid_q && depth_q == '0
-				&& in_valid_i && !out_ready_i) begin
+			end else if (Pass && !valid_q && depth_q == '0	&& in_valid_i && !out_ready_i) begin
 				data_q <= in_data_i;
 			end
 		end
@@ -91,8 +84,7 @@ module my_fifo #(
 				write_pointer_q <= '0;
 			end else if (clear_i) begin
 				write_pointer_q <= '0;
-			end else if (in_valid_i && in_ready_o
-				&& !(Pass && !valid_q && depth_q == '0)) begin
+			end else if (in_valid_i && in_ready_o && !(Pass && !valid_q && depth_q == '0)) begin
 				if (write_pointer_q == FIFO_POINTER_WIDTH'(Depth - 1)) begin
 					write_pointer_q <= '0;
 				end else begin
@@ -106,8 +98,7 @@ module my_fifo #(
 				read_pointer_q <= '0;
 			end else if (clear_i) begin
 				read_pointer_q <= '0;
-			end else if ((!valid_q && depth_q != '0)
-				|| (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1))) begin
+			end else if ((!valid_q && depth_q != '0) || (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1))) begin
 				if (read_pointer_q == FIFO_POINTER_WIDTH'(Depth - 1)) begin
 					read_pointer_q <= '0;
 				end else begin
@@ -122,13 +113,7 @@ module my_fifo #(
 			end else if (clear_i) begin
 				depth_q <= '0;
 			end else begin
-				unique case ({
-					(in_valid_i && in_ready_o
-						&& !(Pass && !valid_q && depth_q == '0))
-					|| (Pass && !valid_q && depth_q == '0
-						&& in_valid_i && !out_ready_i),
-					valid_q && out_ready_i
-				})
+				unique case ({(in_valid_i && in_ready_o	&& !(Pass && !valid_q && depth_q == '0)) || (Pass && !valid_q && depth_q == '0&& in_valid_i && !out_ready_i), valid_q && out_ready_i})
 					2'b10: depth_q <= depth_q + 1'b1;
 					2'b01: depth_q <= depth_q - 1'b1;
 					default: begin
@@ -142,10 +127,7 @@ module my_fifo #(
 				valid_q <= 1'b0;
 			end else if (clear_i) begin
 				valid_q <= 1'b0;
-			end else if ((!valid_q && depth_q != '0)
-				|| (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1))
-				|| (Pass && !valid_q && depth_q == '0
-					&& in_valid_i && !out_ready_i)) begin
+			end else if ((!valid_q && depth_q != '0) || (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1)) || (Pass && !valid_q && depth_q == '0 && in_valid_i && !out_ready_i)) begin
 				valid_q <= 1'b1;
 			end else if (valid_q && out_ready_i) begin
 				valid_q <= 1'b0;
@@ -161,11 +143,9 @@ module my_fifo #(
 		logic [Width-1:0] data_q;
 		logic valid_q;
 
-		assign in_ready_o = depth_q < FIFO_DEPTH_WIDTH'(Depth)
-			|| (valid_q && out_ready_i);
+		assign in_ready_o = depth_q < FIFO_DEPTH_WIDTH'(Depth) || (valid_q && out_ready_i);
 		assign out_data_o = (Pass && !valid_q && depth_q == '0) ? in_data_i : data_q;
-		assign out_valid_o = valid_q
-			|| (Pass && !valid_q && depth_q == '0 && in_valid_i);
+		assign out_valid_o = valid_q || (Pass && !valid_q && depth_q == '0 && in_valid_i);
 		assign depth_o = depth_q;
 
 		always_ff @(posedge clk_i) begin
@@ -221,11 +201,7 @@ module my_fifo #(
 			end else begin
 				unique case ({
 					(in_valid_i && in_ready_o
-						&& !(Pass && !valid_q && depth_q == '0))
-					|| (Pass && !valid_q && depth_q == '0
-						&& in_valid_i && !out_ready_i),
-					valid_q && out_ready_i
-				})
+						&& !(Pass && !valid_q && depth_q == '0)) || (Pass && !valid_q && depth_q == '0 && in_valid_i && !out_ready_i), valid_q && out_ready_i})
 					2'b10: depth_q <= depth_q + 1'b1;
 					2'b01: depth_q <= depth_q - 1'b1;
 					default: begin
@@ -239,10 +215,7 @@ module my_fifo #(
 				valid_q <= 1'b0;
 			end else if (clear_i) begin
 				valid_q <= 1'b0;
-			end else if ((!valid_q && depth_q != '0)
-				|| (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1))
-				|| (Pass && !valid_q && depth_q == '0
-					&& in_valid_i && !out_ready_i)) begin
+			end else if ((!valid_q && depth_q != '0) || (valid_q && out_ready_i && depth_q > FIFO_DEPTH_WIDTH'(1)) || (Pass && !valid_q && depth_q == '0 && in_valid_i && !out_ready_i)) begin
 				valid_q <= 1'b1;
 			end else if (valid_q && out_ready_i) begin
 				valid_q <= 1'b0;
