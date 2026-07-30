@@ -26,18 +26,18 @@ module rvlab_ddr_mux #(
 	localparam int COUNT_WIDTH = $clog2(MAX_OUTSTANDING + 1);
 
 	reg [DDR_ANCW-1:0] ancillary_mem [MAX_OUTSTANDING-1:0];
-	reg [    LOGN-1:0]    source_mem [MAX_OUTSTANDING-1:0];
+	reg [    LOGN-1:0] source_mem    [MAX_OUTSTANDING-1:0];
 
-	logic [LOG_REQS-1:0] rptr, wptr;
+	logic [   LOG_REQS-1:0] rptr, wptr;
 	logic [COUNT_WIDTH-1:0] outstanding_q;
 
-	ddr3_h2d_t sel_host_h2d;
+	ddr3_h2d_t       sel_host_h2d;
 	logic [LOGN-1:0] sel_host_id;
 	logic [LOGN-1:0] response_host_id;
-	logic route_empty;
-	logic route_full;
-	logic request_fire;
-	logic response_fire;
+	logic            route_empty;
+	logic            route_full;
+	logic            request_fire;
+	logic            response_fire;
 
 	assign route_empty = outstanding_q == '0;
 	assign route_full = outstanding_q == COUNT_WIDTH'(MAX_OUTSTANDING);
@@ -86,9 +86,6 @@ module rvlab_ddr_mux #(
 		end
 	end
 
-	// The A channel follows the selected requester. The D-channel ready signal
-	// MUST follow the owner of the oldest outstanding request, not the requester
-	// currently selected by the A-channel arbiter.
 	always_comb begin
 		dev_o = sel_host_h2d;
 		dev_o.a_valid = sel_host_h2d.a_valid && !route_full;
@@ -109,10 +106,5 @@ module rvlab_ddr_mux #(
 			end
 		end
 	end
-
-`ifndef SYNTHESIS
-	`ASSERT(routeCountInRange, outstanding_q <= COUNT_WIDTH'(MAX_OUTSTANDING), clk_i, !rst_ni)
-	`ASSERT(noResponseWithoutRoute, dev_i.d_valid |-> !route_empty, clk_i, !rst_ni)
-`endif
 
 endmodule

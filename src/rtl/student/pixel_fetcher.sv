@@ -74,32 +74,6 @@ module pixel_fetcher #(
 	assign rptr_block = rptr[PIX_SELW-1:5];
 	assign response_block = rsp_i.d_anc[2+:(PIX_SELW-5)];
 
-	/*
-	 * Previous direct FIFO output implementation:
-	 *
-	 * Coordinates and valid were selected combinationally by rptr. The HDMI
-	 * coordinate comparison therefore fed back through consume_i into rptr and
-	 * block_valid_q in the same cycle.
-	 *
-	assign cx_o = {cx_q[rptr_block], rptr[4:0]};
-	assign cy_o = cy_q[rptr_block];
-	// Previous per-pixel validity implementation:
-	// assign valid_o = valid_q[rptr];
-	assign valid_o = block_valid_q[rptr_block];
-
-	always_ff @(posedge clk_i or negedge rst_ni) begin
-		if (~rst_ni) begin
-			r_o <= '0;
-			g_o <= '0;
-			b_o <= '0;
-		end else begin
-			r_o <= r_buf_q[rptr_block][rptr[4:0]*8+:8];
-			g_o <= g_buf_q[rptr_block][rptr[4:0]*8+:8];
-			b_o <= b_buf_q[rptr_block][rptr[4:0]*8+:8];
-		end
-	end
-	 */
-
 	logic [ 7:0] pixel_r_q;
 	logic [ 7:0] pixel_g_q;
 	logic [ 7:0] pixel_b_q;
@@ -122,7 +96,7 @@ module pixel_fetcher #(
 	assign cy_o = pixel_cy_q;
 	assign valid_o = pixel_valid_q;
 
-	// Pixel data and coordinates remain stable while valid_o is waiting.
+	// Pixel data and coordinates remain stable while valid_o is waiting
 	always_ff @(posedge clk_i or negedge rst_ni) begin
 		if (~rst_ni) begin
 			pixel_r_q  <= '0;
@@ -161,122 +135,6 @@ module pixel_fetcher #(
 	} fetch_state_e;
 
 	fetch_state_e state_q;
-
-	/*
-	 * Previous per-pixel validity implementation:
-	 *
-	always_ff @(posedge clk_i or negedge rst_ni) begin
-		if (~rst_ni) begin
-			valid_q      <= '0;
-			state_q      <= RED;
-			wptr         <= '0;
-			rptr         <= '0;
-			fetch_cx     <= '0;
-			fetch_cy     <= '0;
-			cur_frame_id <= '0;
-		end else begin
-			if (enable_i) begin
-				if (req_o.a_valid && rsp_i.a_ready) begin
-					case (state_q)
-						RED  : state_q <= GREEN;
-						GREEN: state_q <= BLUE;
-						BLUE : state_q <= RED;
-						default: ;
-					endcase
-					if (state_q == BLUE) begin
-						fetch_cx <= fetch_cx + 1;
-						wptr <= wptr + 1;
-						if (fetch_cx == W_CHUNKS - 1) begin
-							fetch_cx <= '0;
-							fetch_cy <= fetch_cy + 1;
-							if (fetch_cy == FRAMEH - 1) begin
-								fetch_cy <= '0;
-								cur_frame_id <= next_frame_id_i;
-							end
-						end
-					end
-				end
-				if (rsp_i.d_valid && req_o.d_ready) begin
-					// channel is given in d_anc field
-					if (rsp_i.d_anc[1:0] == BLUE) begin
-						valid_q[32*response_block+:32] <= '1;
-					end
-				end
-			end else begin
-				valid_q      <= '0;
-				state_q      <= RED;
-				wptr         <= '0;
-				rptr         <= '0;
-				fetch_cx     <= '0;
-				fetch_cy     <= '0;
-				cur_frame_id <= '0;
-			end
-			if (consume_i && valid_o) begin
-				rptr <= rptr + 1;
-				valid_q[rptr] <= '0;
-			end
-		end
-	end
-	 */
-
-	/*
-	 * Previous block-valid implementation with direct FIFO output:
-	 *
-	always_ff @(posedge clk_i or negedge rst_ni) begin
-		if (~rst_ni) begin
-			block_valid_q <= '0;
-			state_q       <= RED;
-			wptr          <= '0;
-			rptr          <= '0;
-			fetch_cx      <= '0;
-			fetch_cy      <= '0;
-			cur_frame_id  <= '0;
-		end else begin
-			if (enable_i) begin
-				if (req_o.a_valid && rsp_i.a_ready) begin
-					case (state_q)
-						RED  : state_q <= GREEN;
-						GREEN: state_q <= BLUE;
-						BLUE : state_q <= RED;
-						default: ;
-					endcase
-					if (state_q == BLUE) begin
-						fetch_cx <= fetch_cx + 1;
-						wptr <= wptr + 1;
-						if (fetch_cx == W_CHUNKS - 1) begin
-							fetch_cx <= '0;
-							fetch_cy <= fetch_cy + 1;
-							if (fetch_cy == FRAMEH - 1) begin
-								fetch_cy <= '0;
-								cur_frame_id <= next_frame_id_i;
-							end
-						end
-					end
-				end
-				if (rsp_i.d_valid && req_o.d_ready) begin
-					// channel is given in d_anc field
-					if (rsp_i.d_anc[1:0] == BLUE) begin
-						block_valid_q[response_block] <= 1'b1;
-					end
-				end
-			end else begin
-				block_valid_q <= '0;
-				state_q       <= RED;
-				wptr          <= '0;
-				rptr          <= '0;
-				fetch_cx      <= '0;
-				fetch_cy      <= '0;
-				cur_frame_id  <= '0;
-			end
-			if (consume_i && valid_o) begin
-				rptr <= rptr + 1;
-				if (rptr[4:0] == 5'd31) begin
-					block_valid_q[rptr_block] <= 1'b0;
-				end
-			end
-		end
-	end
-	 */
 
 	always_ff @(posedge clk_i or negedge rst_ni) begin
 		if (~rst_ni) begin

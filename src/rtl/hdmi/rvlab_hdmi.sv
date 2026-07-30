@@ -14,9 +14,7 @@ module rvlab_hdmi (
 	output logic [2:0] tmds_o,
 
 	output rvlab_ddr_pkg::ddr3_h2d_t ddr_o,
-	input  rvlab_ddr_pkg::ddr3_d2h_t ddr_i,
-
-	output logic frame_irq_o
+	input  rvlab_ddr_pkg::ddr3_d2h_t ddr_i
 );
 
 	import tlul_pkg::*;
